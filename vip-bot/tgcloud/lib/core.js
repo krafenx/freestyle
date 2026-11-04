@@ -171,9 +171,21 @@ export function dueReminders(grant, now = Date.now(), { tz = DEFAULT_TZ, hour = 
   const has = (kind) => sent.includes(kind);
   const push = (kind, severity) => { if (!has(kind)) out.push({ kind, severity }); };
 
+  // Общее правило для просрочки: работает «догон». Пропущенное окно не теряется,
+  // а отправляется на первом же тике после пробуждения — иначе при ленивом тике
+  // (бот проснулся не в тот день) можно вообще не получить главное напоминание
+  // «сними VIP». За один тик отправляется максимум одно сообщение.
+  const lateKinds = (prefix) => {
+    const late = -dl;
+    const k = Math.min(MAX_ESCALATIONS, Math.floor(late / 7));
+    if (k >= 1 && !has(`${prefix}-${k}`)) return `${prefix}-${k}`;
+    return null;
+  };
+
   if (status === 'keep') {
-    // «Оставили»: тихое напоминание раз в неделю, без эскалации.
-    if (dl < 0 && -dl % 7 === 1) push('keep-7d', 'soft');
+    // «Оставили»: тихое напоминание раз в неделю, начиная с 7-го дня.
+    const kind = lateKinds('keep');
+    if (kind) out.push({ kind, severity: 'soft' });
     return out;
   }
 
@@ -182,11 +194,11 @@ export function dueReminders(grant, now = Date.now(), { tz = DEFAULT_TZ, hour = 
   if (dl === 0 && tzParts(now, tz).hour >= hour) push('t-0', 'warn');
 
   if (dl < 0) {
-    const late = -dl;
-    if (late === 1) push('overdue', 'hot');
-    else {
-      const k = Math.floor((late - 1) / 7);
-      if (k >= 1) push(`escalation-${Math.min(k, MAX_ESCALATIONS)}`, 'hot');
+    if (!has('overdue')) {
+      out.push({ kind: 'overdue', severity: 'hot' });   // догон: однажды, но обязательно
+    } else {
+      const kind = lateKinds('escalation');
+      if (kind) out.push({ kind, severity: 'hot' });
     }
   }
   return out;
@@ -223,13 +235,14 @@ export function reminderText(grant, kind, { tz = DEFAULT_TZ, now = Date.now() } 
     't-1': `⚠️ ${who} — VIP до ${until} (остался день)`,
     't-0': `🔥 ${who} — VIP истекает сегодня (${until})`,
     overdue: `🕳 ${who} — VIP просрочен ${until} (${humanDays(dl)})`,
-    'keep-7d': `🙈 ${who} — VIP оставлен, до ${until}`,
   }[kind] || `• ${who} — VIP до ${until}`;
   const body = kind.startsWith('escalation-')
     ? `${head.replace(/^./, '❗')} · ${kind.split('-')[1]}-е напоминание, ${humanDays(dl)}`
-    : head;
+    : kind.startsWith('keep-')
+      ? `🙈 ${who} — оставили, но срок вышел ${formatDateRu(grant.expiresAt, tz)} · ${humanDays(dl)}`
+      : head;
   // Главное действие напоминания — снять роль. Даём готовую команду для копирования.
-  if (kind !== 'keep-7d' && grant.login) {
+  if (!kind.startsWith('keep') && grant.login) {
     return `${body}\nснять: <code>/unvip ${grant.login}</code>`;
   }
   return body;

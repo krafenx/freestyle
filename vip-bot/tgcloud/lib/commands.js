@@ -17,6 +17,22 @@ import { HELP, reminderKeyboard, listKeyboard, copyableCommand, esc } from 'lib/
 
 const BOT_ONLY = 'команда для личного чата с ботом или для группы модераторов';
 
+// Ленивый тик: не чаще раза в 5 минут, иначе каждое сообщение в группе модераторов
+// будет дёргать базу. Одного раза в 5 минут хватает: напоминания точны до часов.
+const TICK_THROTTLE_MS = 5 * 60_000;
+
+async function lazyTick(cfg) {
+  if (Date.now() - Number(cfg.lastTickAt || 0) < TICK_THROTTLE_MS) return null;
+  await store.patchConfig({ lastTickAt: Date.now() });
+  try {
+    return await runTick({ trigger: 'lazy' });
+  } catch (err) {
+    // Упавший тик не должен ломать ответ на команду.
+    console.error('lazy tick failed', err);
+    return { reminders: 0, digest: false, errors: [String(err.message || err)] };
+  }
+}
+
 async function say(chatId, text, extra = {}) {
   try {
     return await api.sendMessage({ chat_id: chatId, text, parse_mode: 'HTML', ...extra });
@@ -84,7 +100,16 @@ export async function onMessage(message) {
   }
 
   const cmd = parseVipCommand(text);
-  if (cmd.ignored) return;                 // не наша команда — молчим
+
+  // Не команда, а просто сообщение в чате модераторов: молчим, но используем
+  // момент как повод проверить сроки (тик всё равно throttled).
+  if (cmd.ignored) {
+    const cfgNow = await store.getConfig();
+    if (!cfgNow.ownerId) return;           // до /start бот не настроен — не реагируем
+    if (!(await store.isAdmin(message.from?.id))) return;
+    await lazyTick(cfgNow);
+    return;
+  }
   if (cmd.error) return say(message.chat.id, `⚠️ ${cmd.error}`);
 
   const access = await ensureAccess(message);
@@ -92,11 +117,8 @@ export async function onMessage(message) {
   const cfg = access.cfg;
   const actor = message.from.id;
 
-  // Ленивый тик: пока бот всё равно проснулся, проверяем сроки.
-  let tick = null;
-  if (['list', 'check', 'info'].includes(cmd.sub)) {
-    tick = await runTick({ trigger: 'lazy' });
-  }
+  // Любая команда — тоже повод проверить сроки.
+  const tick = await lazyTick(cfg);
 
   switch (cmd.sub) {
     case 'add': {

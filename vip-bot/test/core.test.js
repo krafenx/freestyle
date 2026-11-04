@@ -134,18 +134,34 @@ test('T-0 только после 10:00 локального', () => {
 
 test('в промежуточные дни молчим', () => {
   assert.deepEqual(kindsAt(utc(2026, 11, 8, 8)), []);
-  assert.deepEqual(kindsAt(utc(2026, 11, 12, 8)), []); // просрочка на 2 дня — уже отшумели
 });
 
-test('просрочка и недельная эскалация', () => {
-  assert.deepEqual(kindsAt(utc(2026, 11, 11, 8)), ['overdue']);
-  assert.deepEqual(kindsAt(utc(2026, 11, 18, 8)), ['escalation-1']);
-  assert.deepEqual(kindsAt(utc(2026, 11, 25, 8)), ['escalation-2']);
+test('просрочка приходит догоном, а не строго в один день', () => {
+  // пропустили день -1 (бот не просыпался) — на следующем тике всё равно скажем
+  assert.deepEqual(kindsAt(utc(2026, 11, 12, 8)), ['overdue']);   // -2
+  assert.deepEqual(kindsAt(utc(2026, 11, 20, 8)), ['overdue']);   // -10
+  assert.deepEqual(kindsAt(utc(2026, 12, 30, 8)), ['overdue']);   // -50
+  // уже отправляли — тишина до недельной эскалации
+  assert.deepEqual(kindsAt(utc(2026, 11, 12, 8), {}, { sent: ['overdue'] }), []);
+});
+
+test('недельная эскалация после просрочки', () => {
+  const sentOverdue = { sent: ['overdue'] };
+  assert.deepEqual(kindsAt(utc(2026, 11, 18, 8), {}, sentOverdue), ['escalation-1']);  // -8
+  assert.deepEqual(kindsAt(utc(2026, 11, 25, 8), {}, sentOverdue), ['escalation-2']);  // -15
+  // шаг уже отправлен — в промежутке до следующей недели молчим
+  assert.deepEqual(
+    kindsAt(utc(2026, 11, 20, 8), {}, { sent: ['overdue', 'escalation-1'] }),
+    [],
+  );
 });
 
 test('эскалация упирается в 4 и затихает', () => {
-  assert.deepEqual(kindsAt(utc(2026, 12, 16, 8)), ['escalation-4']);
-  assert.deepEqual(kindsAt(utc(2026, 12, 23, 8)), ['escalation-4']); // тот же kind
+  assert.deepEqual(kindsAt(utc(2026, 12, 16, 8), {}, { sent: ['overdue'] }), ['escalation-4']);
+  assert.deepEqual(
+    kindsAt(utc(2026, 12, 23, 8), {}, { sent: ['overdue', 'escalation-4'] }),
+    [],
+  );
 });
 
 test('повторный тик не дублирует: sent блокирует', () => {
@@ -158,8 +174,9 @@ test('snooze («напомнить завтра») глушит напомина
 });
 
 test('keep: тихое напоминание раз в неделю', () => {
-  assert.deepEqual(kindsAt(utc(2026, 11, 18, 8), { status: 'keep' }), ['keep-7d']);
-  assert.deepEqual(kindsAt(utc(2026, 11, 17, 8), { status: 'keep' }), []);
+  assert.deepEqual(kindsAt(utc(2026, 11, 18, 8), { status: 'keep' }), ['keep-1']);
+  assert.deepEqual(kindsAt(utc(2026, 11, 18, 8), { status: 'keep' }, { sent: ['keep-1'] }), []);
+  assert.deepEqual(kindsAt(utc(2026, 11, 25, 8), { status: 'keep' }, { sent: ['keep-1'] }), ['keep-2']);
 });
 
 test('закрытые записи не напоминают', () => {
@@ -213,7 +230,7 @@ test('reminderText: в напоминании есть готовая коман
 });
 
 test('reminderText: «оставить» не подсовывает команду снятия', () => {
-  const text = reminderText(grant({ status: 'keep' }), 'keep-7d', { tz: MSK, now: utc(2026, 11, 18, 8) });
+  const text = reminderText(grant({ status: 'keep' }), 'keep-1', { tz: MSK, now: utc(2026, 11, 18, 8) });
   assert.equal(text.includes('/unvip'), false);
 });
 

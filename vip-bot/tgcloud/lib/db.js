@@ -40,6 +40,7 @@ export async function getConfig() {
     chatId: cfg.chatId || null,             // куда слать напоминания
     ownerId: cfg.ownerId || null,
     lastDigestDay: cfg.lastDigestDay ?? null,
+    lastTickAt: cfg.lastTickAt ?? 0,
   };
 }
 

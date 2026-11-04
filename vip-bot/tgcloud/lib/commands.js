@@ -9,7 +9,7 @@ import { api } from 'sdk';
 import {
   parseVipCommand, parseDateOnly, nextExpiry, formatDateRu, formatDateTimeRu,
   grantLine, dashboardText, csvText, chunkText, daysLeft, humanDays,
-  STATUS_LABELS, escapeHtml,
+  STATUS_LABELS, escapeHtml, isTwitchLogin, LOGIN_HINT,
 } from 'lib/core';
 import * as store from 'lib/db';
 import { runTick, tickSummary } from 'lib/tick';
@@ -59,6 +59,13 @@ async function resolvePeriod(cmd, cfg) {
   return { expiresAt: Date.now() + days * 86_400_000, days };
 }
 
+/** Twitch API мы не используем, поэтому ник — просто строка. Но мусор отсекаем сразу. */
+function checkLogin(login) {
+  if (!login) return 'кого? укажи ник: `/vip add @nick`';
+  if (!isTwitchLogin(login)) return `«${login}» не похоже на ник Twitch — ${LOGIN_HINT}`;
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // message
 // ---------------------------------------------------------------------------
@@ -93,7 +100,8 @@ export async function onMessage(message) {
 
   switch (cmd.sub) {
     case 'add': {
-      if (!cmd.login) return say(message.chat.id, 'кого? `/vip add @nick [30d]`');
+      const bad = checkLogin(cmd.login);
+      if (bad) return say(message.chat.id, bad);
       const period = await resolvePeriod(cmd, cfg);
       if (period.error) return say(message.chat.id, `⚠️ ${period.error}`);
 
@@ -140,7 +148,8 @@ export async function onMessage(message) {
     }
 
     case 'info': {
-      if (!cmd.login) return say(message.chat.id, 'по кому? `/vip info @nick`');
+      const badInfo = checkLogin(cmd.login);
+      if (badInfo) return say(message.chat.id, badInfo);
       const rows = await store.listByLogin(cmd.login);
       if (!rows.length) return say(message.chat.id, `по @${esc(cmd.login)} записей нет`);
       const lines = rows.map((g) => [
@@ -152,7 +161,8 @@ export async function onMessage(message) {
     }
 
     case 'extend': {
-      if (!cmd.login) return say(message.chat.id, 'кого? `/vip extend @nick [+30d]`');
+      const badExt = checkLogin(cmd.login);
+      if (badExt) return say(message.chat.id, badExt);
       const grant = await store.findOpenByLogin(cmd.login);
       if (!grant) return say(message.chat.id, `у @${esc(cmd.login)} нет активной записи`);
       const days = cmd.days || cfg.periodDays;
@@ -172,18 +182,20 @@ export async function onMessage(message) {
     }
 
     case 'remove': {
-      if (!cmd.login) return say(message.chat.id, 'кого? `/vip remove @nick [причина]`');
+      const badRem = checkLogin(cmd.login);
+      if (badRem) return say(message.chat.id, badRem);
       const grant = await store.findOpenByLogin(cmd.login);
       if (!grant) return say(message.chat.id, `у @${esc(cmd.login)} нет активной записи`);
       await closeGrant(grant, { actor, reason: cmd.note || cmd.args.join(' ') || null });
       return say(
         message.chat.id,
-        `✅ @${esc(grant.login)} закрыт.\nне забудь снять роль: <code>/unvip ${esc(grant.login)}</code>`,
+        `✅ @${esc(grant.login)} закрыт в учёте.\nесли ещё не снял роль: <code>/unvip ${esc(grant.login)}</code>`,
       );
     }
 
     case 'keep': {
-      if (!cmd.login) return say(message.chat.id, 'кого? `/vip keep @nick`');
+      const badKeep = checkLogin(cmd.login);
+      if (badKeep) return say(message.chat.id, badKeep);
       const grant = await store.findOpenByLogin(cmd.login);
       if (!grant) return say(message.chat.id, `у @${esc(cmd.login)} нет активной записи`);
       await store.patchGrant(grant.id, { status: 'keep', snoozeUntil: null });
@@ -192,7 +204,8 @@ export async function onMessage(message) {
     }
 
     case 'cancel': {
-      if (!cmd.login) return say(message.chat.id, 'кого? `/vip cancel @nick`');
+      const badCancel = checkLogin(cmd.login);
+      if (badCancel) return say(message.chat.id, badCancel);
       const grant = await store.findOpenByLogin(cmd.login);
       if (!grant) return say(message.chat.id, `у @${esc(cmd.login)} нет активной записи`);
       await store.patchGrant(grant.id, { status: 'cancelled' });
@@ -267,11 +280,6 @@ export async function onMessage(message) {
       }
       return say(message.chat.id, 'так: `/vip admins add 123456789` (id узнаётся командой /vip whoami)');
     }
-
-    case 'sync':
-      return say(message.chat.id,
-        'сверка с каналом недоступна: Helix требует токен стримера, а у модератора его нет.\n' +
-        'Поэтому источник правды — этот учёт. Напоминания проверяются командой /vip check.');
 
     default:
       return say(message.chat.id, HELP);

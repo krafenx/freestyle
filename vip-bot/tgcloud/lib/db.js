@@ -69,7 +69,6 @@ export async function createGrant({
   const grant = {
     id: shortId(),
     login: String(login).toLowerCase(),
-    userId: null,
     display: null,
     source,
     grantedAt: ts,

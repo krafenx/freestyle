@@ -10,6 +10,7 @@ import {
   tzParts, dayNumber, weekday, daysLeft, formatDateRu, humanDays,
   parseVipCommand, parseDateOnly, nextExpiry, dueReminders, digestDue,
   chunkText, csvText, shortId, DAY_MS,
+  isTwitchLogin, reminderText,
 } from '../tgcloud/lib/core.js';
 
 const MSK = 'Europe/Moscow';
@@ -194,6 +195,26 @@ test('csvText экранирует кавычки', () => {
   }], { tz: MSK });
   assert.equal(csv.split('\n').length, 2);
   assert.ok(csv.includes('""битсы""'));
+});
+
+test('isTwitchLogin: отсекаем мусор и кириллицу', () => {
+  assert.equal(isTwitchLogin('nick'), true);
+  assert.equal(isTwitchLogin('Nick_95'), true);
+  assert.equal(isTwitchLogin('abc'), false);          // короче 4
+  assert.equal(isTwitchLogin('ник'), false);          // кириллица
+  assert.equal(isTwitchLogin('my nick'), false);      // пробел
+  assert.equal(isTwitchLogin(''), false);
+});
+
+test('reminderText: в напоминании есть готовая команда снятия', () => {
+  const text = reminderText(grant(), 't-1', { tz: MSK, now: utc(2026, 11, 9, 8) });
+  assert.ok(text.includes('/unvip nick'), text);
+  assert.ok(text.includes('@nick'));
+});
+
+test('reminderText: «оставить» не подсовывает команду снятия', () => {
+  const text = reminderText(grant({ status: 'keep' }), 'keep-7d', { tz: MSK, now: utc(2026, 11, 18, 8) });
+  assert.equal(text.includes('/unvip'), false);
 });
 
 test('shortId: 8 символов', () => {

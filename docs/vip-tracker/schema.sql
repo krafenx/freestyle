@@ -1,3 +1,7 @@
+-- ВНИМАНИЕ: это версия схемы для НЕ-serverless варианта (D1/Postgres/VPS) — оставлена для
+-- сравнения. Живая схема проекта — vip-bot/tgcloud/schema.js (DSL платформы), и она проще:
+-- Twitch API не используется, поэтому user_id/redeemed_id/meta_json там отсутствуют.
+--
 -- Схема для учёта Twitch VIP (SQLite / Cloudflare D1-совместимо, PostgreSQL — почти без правок).
 -- Все даты — UTC, ISO-8601 строкой ('2026-11-04T15:00:00Z') в SQLite, timestamptz в Postgres.
 

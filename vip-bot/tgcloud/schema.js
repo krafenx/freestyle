@@ -10,8 +10,7 @@ import { table, integer, text, index, uniqueIndex, sql } from 'sdk/db';
 // renewedFrom на предыдущую, чтобы история не терялась.
 export const grants = table('vip_grants', {
   id:         text('id').primaryKey(),            // короткий id (8 символов) — влезает в callback_data
-  login:      text('login').notNull(),            // нижний регистр, без @
-  userId:     text('user_id'),                    // twitch user id, если когда-нибудь резолвим
+  login:      text('login').notNull(),            // ник в Twitch, нижний регистр, без @
   display:    text('display_name'),
   source:     text('source').notNull().default('manual'),
   grantedAt:  integer('granted_at', { mode: 'timestamp' }).notNull(),
@@ -27,8 +26,9 @@ export const grants = table('vip_grants', {
 }, (t) => ({
   byStatusExpiry: index('idx_grants_status_expires').on(t.status, t.expiresAt),
   byLogin:        index('idx_grants_login').on(t.login),
-  // инвариант «не больше одного активного периода на человека» держит сама база
-  oneActive:      uniqueIndex('uq_grants_one_active').on(t.userId).where(sql`status = 'active'`),
+  // Инвариант «не больше одного активного периода на человека» держит сама база.
+  // Именно по login: Twitch API мы не используем, user id взять неоткуда.
+  oneActive:      uniqueIndex('uq_grants_one_active').on(t.login).where(sql`status = 'active'`),
 }));
 
 // Журнал напоминаний: UNIQUE(grantId, kind) — гарантия «не больше одного раза».

@@ -78,22 +78,27 @@
 
 ```sql
 vip_grants (
-  id, twitch_user_id UNIQUE-ish, login, display_name,
-  source,            -- 'channel_points' | 'manual' | 'donation' | 'other'
+  id,                -- короткий 8-символьный (влезает в callback_data)
+  login,             -- ник Twitch, нижний регистр; user id НЕ храним (нет API)
+  display_name,      -- опционально, для красоты
+  source,            -- 'manual' (по умолчанию) | 'donation' | 'other'
   granted_at, expires_at,      -- UTC
-  status,            -- 'pending' | 'active' | 'expiring' | 'expired' | 'removed' | 'keep' | 'waitlist' | 'cancelled'
-  granted_by,        -- tg_user_id или 'reward'
-  redeemed_id,       -- id редима каналпоинтов (дедуп)
-  renewed_from_id, notes,
-  meta_json
+  status,            -- 'active' | 'expiring' | 'expired' | 'removed' | 'keep' | 'cancelled'
+  period_days,       -- 30 по умолчанию
+  snooze_until,      -- «напомнить завтра»
+  granted_by,        -- tg_user_id модератора
+  renewed_from_id,   -- ссылка на предыдущий период (не FK: их нет)
+  notes
 )
 notifications_log (grant_id, kind, sent_at, UNIQUE(grant_id, kind))  -- идемпотентность
 audit_log (ts, actor_tg_id, action, payload_json)
 settings (key, value_json)  -- tz, длина периода, оффсеты напоминаний, reward_id, канал
 ```
 
-Индексы: `(status, expires_at)` — под крон; `UNIQUE(twitch_user_id, status) WHERE status='active'` —
-чтобы физически не было двух активных записей на человека. Полный DDL — в `schema.sql`.
+Индексы: `(status, expires_at)` — под крон; частичный `UNIQUE(login) WHERE status='active'` —
+чтобы физически не было двух активных записей на человека. Живая схема — в
+[`../../vip-bot/tgcloud/schema.js`](../../vip-bot/tgcloud/schema.js), та же модель в обычном SQL —
+в `schema.sql`.
 
 Машина состояний (её же тестировать в первую очередь):
 
@@ -214,10 +219,10 @@ webhook по HTTPS и крон. Всё остальное — предпочте
 (T−3 / T−1 / T−0 / просрочка / неделя) — «столбим» в `notifications` и отправляем с кнопками;
 (в) уже отправляли — молчим, потому что `UNIQUE(grant_id, kind)`.
 
-Сверки с реальным списком VIP в этой схеме нет и быть не может: `GET /channels/vips` требует
-токен стримера. Поэтому единственный способ не расходиться с реальностью — дисциплина модератора
-плюс `/vip list` перед стримом. Если когда-нибудь появится токен стримера, сверка добавляется
-отдельной командой, а не в тик.
+Twitch API в проекте нет вообще — ни выдачи, ни снятия, ни сверки списка VIP. Решение принято
+осознанно: записываю в боте → выдаю командой в чате → жду напоминания → снимаю. Поэтому нет ни
+`user_id` (ник хранится текстом, проверяется только формат), ни OAuth, ни сверки: единственная
+дисциплина, которая нужна, — `/vip list` перед стримом.
 
 ## 8. Крайние случаи (их 20%, которые съедают 80% времени)
 
@@ -227,7 +232,8 @@ webhook по HTTPS и крон. Всё остальное — предпочте
 - **Юзер заблокирован** → 400. Алерт.
 - **Стример отозвал токен / refresh не сработал** → бот переходит в ручной режим (вариант B) и
   пишет об этом в чат. Никогда не молча.
-- **Сменился логин** — храним `twitch_user_id`, `login` обновляем при сверке.
+- **Сменился ник** — записи по старому нику остаются в истории; для нового ника это новая запись
+  (`/vip info` покажет обе, если помнишь старый).
 - **Двойная доставка вебхука** (Twitch ретраит) → UNIQUE по `message-id` и по `redeemed_id`.
 - **Сняли VIP вручную / выдали мимо бота** → ловит сверка, а не догадки.
 - **Крон не сработал** (serverless без ретраев) → крон каждый час, логи `last_run_at`; если
@@ -239,7 +245,7 @@ webhook по HTTPS и крон. Всё остальное — предпочте
 
 ## 9. Безопасность / гигиена
 
-- Whitelist `tg_user_id` (2–3 человека) + отдельная «админ»-роль на `/vip sync`/`export`.
+- Whitelist `tg_user_id` (2–3 человека); экспорт и настройки доступны только владельцу/админам.
 - `setWebhook(secret_token=...)` + проверка заголовка `X-Telegram-Bot-Api-Secret-Token`; для Twitch —
   HMAC подпись. Оба секрета — в env/secrets, не в коде.
 - Токены Twitch (особенно `refresh_token` стримера) — шифровать ключом из env (AES-GCM), в логи не

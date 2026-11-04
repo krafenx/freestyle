@@ -84,7 +84,7 @@ export function humanDays(dl) {
 
 const SUBCOMMANDS = new Set([
   'add', 'list', 'info', 'extend', 'remove', 'keep', 'cancel',
-  'export', 'stats', 'dashboard', 'sync', 'whoami', 'help', 'admins',
+  'export', 'stats', 'dashboard', 'whoami', 'help', 'admins',
 ]);
 
 /**
@@ -121,6 +121,15 @@ export function parseVipCommand(text) {
   if (out.to && !/^\d{4}-\d{2}-\d{2}$/.test(out.to)) return { ...out, error: 'дата должна быть в формате ГГГГ-ММ-ДД' };
   return out;
 }
+
+/** Ник в Twitch: латиница/цифры/подчёркивание, 4–25 символов. */
+export const TWITCH_LOGIN_RE = /^[a-z0-9_]{4,25}$/;
+
+export function isTwitchLogin(login) {
+  return TWITCH_LOGIN_RE.test(String(login || '').toLowerCase());
+}
+
+export const LOGIN_HINT = 'нужен ник из Twitch: латиница, цифры или «_», 4–25 символов';
 
 /** Дата из `--to` (полдень UTC выбранного дня — чтобы не прыгать через границу суток). */
 export function parseDateOnly(value) {
@@ -216,10 +225,14 @@ export function reminderText(grant, kind, { tz = DEFAULT_TZ, now = Date.now() } 
     overdue: `🕳 ${who} — VIP просрочен ${until} (${humanDays(dl)})`,
     'keep-7d': `🙈 ${who} — VIP оставлен, до ${until}`,
   }[kind] || `• ${who} — VIP до ${until}`;
-  if (kind.startsWith('escalation-')) {
-    return `${head.replace(/^./, '❗')} · ${kind.split('-')[1]}-е напоминание, ${humanDays(dl)}`;
+  const body = kind.startsWith('escalation-')
+    ? `${head.replace(/^./, '❗')} · ${kind.split('-')[1]}-е напоминание, ${humanDays(dl)}`
+    : head;
+  // Главное действие напоминания — снять роль. Даём готовую команду для копирования.
+  if (kind !== 'keep-7d' && grant.login) {
+    return `${body}\nснять: <code>/unvip ${grant.login}</code>`;
   }
-  return head;
+  return body;
 }
 
 export function grantLine(grant, { tz = DEFAULT_TZ, now = Date.now() } = {}) {

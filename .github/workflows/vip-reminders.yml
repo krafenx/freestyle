@@ -1,0 +1,60 @@
+# Внешний «будильник» для напоминаний (крон).
+#
+# На Telegram Serverless нет таймера, поэтому T−3/T−1/T−0 приходят только когда
+# бота кто-то тронул. Этот workflow будит его по расписанию.
+#
+# ВАЖНО, ПОЧЕМУ ФАЙЛ ЛЕЖИТ ИМЕННО ЗДЕСЬ:
+# GitHub читает workflow только из `.github/workflows` в КОРНЕ репозитория.
+# Файл, положенный в подпапку проекта (например vip-bot/.github/workflows/),
+# GitHub игнорирует полностью — в `gh workflow list` его просто не будет.
+# Проект бота лежит в vip-bot/, поэтому рабочий каталог задан через defaults.
+#
+# Что нужно один раз сделать:
+#   1. В @BotFather → ваш бот → Serverless → CLI Access скопировать access token
+#      (это НЕ обычный токен бота: app12345:xxxxx против 12345:AAE...).
+#   2. Settings → Secrets and variables → Actions → New repository secret,
+#      имя TGCLOUD_TOKEN. Либо: gh secret set TGCLOUD_TOKEN
+#   3. Файл должен быть в ветке по умолчанию (main) — расписание из других
+#      веток GitHub не запускает.
+#
+# Пошагово, с граблями: vip-bot/docs/cron.md
+# Если секрета нет — workflow напишет notice и ничего не сделает.
+
+name: vip-reminders
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # каждый час; GitHub может задержать запуск на 5–20 мин
+  workflow_dispatch: {}
+
+concurrency:
+  group: vip-reminders
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: vip-bot
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - id: gate
+        run: echo "have=${{ secrets.TGCLOUD_TOKEN != '' }}" >> "$GITHUB_OUTPUT"
+
+      - if: steps.gate.outputs.have != 'true'
+        run: echo "::notice::TGCLOUD_TOKEN не задан — тик пропущен (см. шапку workflow)"
+
+      - if: steps.gate.outputs.have == 'true'
+        env:
+          TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
+        run: |
+          npm install --no-audit --no-fund --no-save @tgcloud/cli@^0.2.0
+          npx tgcloud run endpoints/tick

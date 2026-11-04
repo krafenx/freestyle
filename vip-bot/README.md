@@ -58,13 +58,14 @@ npx tgcloud migrate              # создать таблицы (push базу 
 
 1. BotFather → бот → Serverless → **CLI Access** → скопировать токен (`app12345:…`, не токен бота).
 2. `gh secret set TGCLOUD_TOKEN --repo krafenx/freestyle` — вставить значение.
-3. Убедиться, что `.github/workflows/reminders.yml` в `main` (расписание из других веток не работает),
+3. Убедиться, что `.github/workflows/vip-reminders.yml` (в корне репозитория) уже в `main` — расписание
+   из других веток и из подпапок GitHub не запускает,
    затем `gh workflow run vip-reminders --repo krafenx/freestyle` проверить руками.
 
 Внешний «будильник» — на выбор, всё сводится к одной команде:
 
 ```bash
-# GitHub Actions (файл .github/workflows/reminders.yml уже в проекте)
+# GitHub Actions (файл .github/workflows/vip-reminders.yml в корне репозитория)
 #   положить секрет репозитория TGCLOUD_TOKEN → тик каждый час
 # или crontab на любой машине:
 0 * * * *  cd /path/to/vip-bot && TGCLOUD_TOKEN=app12345:xxx npx tgcloud run endpoints/tick
@@ -141,5 +142,5 @@ npx tgcloud run endpoints/tick
 
 1. Резервная копия: платформа не отдаёт дампы, поэтому `/vip export` раз в месяц в чат —
    единственный «бэкап» без внешних костылей.
-2. Внешний крон (`.github/workflows/reminders.yml`), если нужны пунктуальные T−0.
+2. Внешний крон (`.github/workflows/vip-reminders.yml`), если нужны пунктуальные T−0.
 3. Всё остальное — по мере того, как выяснится, чего не хватает в реальной работе.

@@ -54,6 +54,13 @@ npx tgcloud migrate              # создать таблицы (push базу 
 | `endpoints/tick` через `npx tgcloud run` | внешний крон (см. ниже) | пунктуально; нужен один секрет и один cron |
 | Кнопка «Проверить» / `/vip check` | по требованию | ручная страховка |
 
+**Включить крон за 3 шага** (подробно, с граблями — [`docs/cron.md`](docs/cron.md)):
+
+1. BotFather → бот → Serverless → **CLI Access** → скопировать токен (`app12345:…`, не токен бота).
+2. `gh secret set TGCLOUD_TOKEN --repo krafenx/freestyle` — вставить значение.
+3. Убедиться, что `.github/workflows/reminders.yml` в `main` (расписание из других веток не работает),
+   затем `gh workflow run vip-reminders --repo krafenx/freestyle` проверить руками.
+
 Внешний «будильник» — на выбор, всё сводится к одной команде:
 
 ```bash

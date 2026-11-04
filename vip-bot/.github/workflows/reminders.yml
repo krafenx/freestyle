@@ -1,4 +1,4 @@
-# Опционально: внешний «будильник» для напоминаний.
+# Внешний «будильник» для напоминаний. Пошаговая инструкция: docs/cron.md
 #
 # На Telegram Serverless нет таймера, поэтому T-3/T-1/T-0 приходят только когда
 # бота кто-то тронул (ленивый тик). Этот workflow будит его по расписанию.
@@ -7,7 +7,8 @@
 #   1. В @BotFather → ваш бот → Serverless → CLI Access скопировать access token
 #      (это НЕ обычный токен бота, он выглядит как app12345:xxxxx).
 #   2. В настройках репозитория добавить секрет TGCLOUD_TOKEN с этим значением.
-#   3. Закоммитить этот файл.
+#   3. Файл должен оказаться в ветке по умолчанию (main) — расписание
+#      из других ветвей GitHub не запускает.
 #
 # Если секрета нет — workflow просто напишет notice и ничего не сделает.
 
@@ -25,6 +26,7 @@ concurrency:
 jobs:
   tick:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
 
@@ -42,5 +44,5 @@ jobs:
         env:
           TGCLOUD_TOKEN: ${{ secrets.TGCLOUD_TOKEN }}
         run: |
-          npm install --no-audit --no-fund @tgcloud/cli@^0.2.0
+          npm install --no-audit --no-fund --no-save @tgcloud/cli@^0.2.0
           npx tgcloud run endpoints/tick

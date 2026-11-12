@@ -1,4 +1,0 @@
-{
-  // Проект без Mini App: статику платформа не раздаёт, `static` не нужен.
-  "$schema": "./node_modules/@tgcloud/cli/schema/tgcloud.json"
-}

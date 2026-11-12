@@ -31,7 +31,11 @@ export function initGrain() {
       const canvas = document.createElement('canvas');
       canvas.width = 128;
       canvas.height = 128;
-      const ctx = canvas.getContext('2d');
+      // Плитку держим в обычной памяти, а не в видеокарте (willReadFrequently). Иначе, чтобы забрать
+      // готовую картинку, страница ждёт видеокарту и на это время замирает целиком. В проверочном
+      // браузере без видеокарты так терялось от 0,4 до 4,5 секунды при каждом открытии страницы.
+      // Сам рисунок от этого не меняется.
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       const img = ctx.createImageData(128, 128);
       const d = img.data;
       let seed = 0x5f3759df;

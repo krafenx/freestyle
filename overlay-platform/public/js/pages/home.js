@@ -1,6 +1,7 @@
 import { initAtmosphere } from '../core/atmosphere.js';
 import { bindModalDismiss, bindRangeFill, initMobileNav, initRail, toast } from '../core/ui.js';
 import { apiFetch, connectRealtime } from '../core/api.js';
+import { fetchSession } from '../core/session.js';
 
 initAtmosphere();
 initMobileNav();
@@ -15,6 +16,16 @@ function setBadge(el, tone, text) {
   el.className = `status-badge ${tone}`;
   el.replaceChildren(Object.assign(document.createElement('span'), { className: 'dot' }), text);
 }
+
+/* ---------- Кто вошёл: вместо «Войти» показываем имя со ссылкой в кабинет ---------- */
+fetchSession().then((session) => {
+  if (!session.authenticated) return;
+  $('nav-login').hidden = true;
+  $('mobile-login').hidden = true;
+  $('nav-user-name').textContent = session.user.displayName; // как текст, не как разметка
+  $('nav-user-letter').textContent = [...session.user.displayName][0] || '?';
+  $('nav-user').hidden = false;
+});
 
 /* ---------- Состояние сервера и базы данных (настоящий ответ сервера) ---------- */
 async function loadServerHealth() {

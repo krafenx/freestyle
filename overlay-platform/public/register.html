@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <title>Регистрация — krafen studio</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/styles/fonts.css">
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/atmosphere.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <link rel="stylesheet" href="/styles/layout.css">
+  <script type="module" src="/js/pages/register.js"></script>
+</head>
+<body>
+  <div id="glow" aria-hidden="true"></div>
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <div class="fog" aria-hidden="true"></div>
+  <div class="fog f2" aria-hidden="true"></div>
+  <div id="flash" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <nav class="topnav" aria-label="Разделы платформы">
+    <a class="brand" href="/" aria-label="krafen studio — на главную">
+      <span class="brand-word">kra<em>fen</em></span>
+      <span class="brand-tag">overlay studio</span>
+    </a>
+    <div class="topnav-right">
+      <a class="btn-action" href="/login" data-keep-next>Вход</a>
+    </div>
+  </nav>
+
+  <main class="auth-page">
+    <div class="glass auth-card">
+      <section id="register-panel" aria-labelledby="register-title">
+        <div class="sec-eyebrow">новый аккаунт</div>
+        <h1 class="auth-title" id="register-title">Регистрация</h1>
+        <p class="auth-lead">Аккаунт нужен и стримеру, и модератору. Почта не требуется.</p>
+
+        <div class="warn-box auth-alert" id="register-closed" hidden>
+          Регистрация новых аккаунтов сейчас закрыта. Если аккаунт у вас уже есть —
+          <a href="/login" data-keep-next>войдите</a>.
+        </div>
+
+        <form class="auth-form" id="register-form" method="post" novalidate>
+          <div class="field">
+            <label class="field-label" for="register-username">Имя пользователя</label>
+            <input class="kf-input" id="register-username" name="username" type="text" autocomplete="username"
+                   autocapitalize="none" autocorrect="off" spellcheck="false" maxlength="24" required>
+            <div class="field-error" id="register-username-error" hidden></div>
+            <div class="field-hint">Латинские буквы, цифры и знак подчёркивания, от 3 до 24 символов. По этому имени вас будут находить и приглашать.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="register-display">
+              <span>Отображаемое имя</span>
+              <span class="field-optional">необязательно</span>
+            </label>
+            <input class="kf-input" id="register-display" name="displayName" type="text" autocomplete="nickname" maxlength="40">
+            <div class="field-error" id="register-display-error" hidden></div>
+            <div class="field-hint">Как вас показывать другим. Можно по-русски.</div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="register-password">Пароль</label>
+            <div class="password-wrap">
+              <input class="kf-input" id="register-password" name="password" type="password"
+                     autocomplete="new-password" maxlength="200" required>
+              <button class="password-toggle" type="button" data-toggle-password="register-password" aria-pressed="false">показать</button>
+            </div>
+            <div class="field-error" id="register-password-error" hidden></div>
+            <div class="field-hint">Не меньше 8 символов.</div>
+          </div>
+
+          <div class="warn-box auth-alert" id="register-error" role="alert" hidden></div>
+
+          <button class="btn-primary auth-submit" type="submit" id="register-submit">Создать аккаунт</button>
+        </form>
+
+        <div class="auth-links">
+          <span>Уже есть аккаунт?</span>
+          <a href="/login" data-keep-next>Войти</a>
+        </div>
+      </section>
+
+      <!-- Код восстановления: показывается один раз -->
+      <section id="code-panel" aria-labelledby="code-title" hidden>
+        <div class="sec-eyebrow">аккаунт создан</div>
+        <h1 class="auth-title" id="code-title" tabindex="-1">Сохраните код восстановления</h1>
+        <p class="auth-lead">
+          Этот код — единственный способ вернуть доступ, если забудете пароль: почты у платформы
+          нет. Он показывается <strong>один раз</strong>. Запишите его или сохраните в менеджере паролей.
+        </p>
+        <div class="code-box">
+          <output class="code-value" id="code-value" aria-label="Код восстановления"></output>
+          <button class="btn-action" type="button" id="code-copy">Скопировать код</button>
+        </div>
+        <label class="kf-check">
+          <input type="checkbox" id="code-saved">
+          <span>Код сохранён в надёжном месте</span>
+        </label>
+        <button class="btn-primary auth-submit" type="button" id="code-continue" disabled>Перейти в кабинет</button>
+      </section>
+      <div class="notice-box auth-hint" id="embed-hint" hidden>
+        Вход выполнен, но браузер его не запомнил: сайт сейчас открыт внутри другой
+        страницы, и браузер не хранит для него данные входа.
+        <a href="/login" target="_blank" rel="noopener" data-keep-next>Откройте сайт в отдельной вкладке</a>
+        и войдите там.
+      </div>
+    </div>
+  </main>
+</body>
+</html>

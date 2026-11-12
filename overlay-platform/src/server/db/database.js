@@ -17,6 +17,41 @@ const MIGRATIONS = [
       VALUES ('platform_stage', '2');
     `,
   },
+  {
+    // Аккаунты и сеансы входа. Время хранится числом миллисекунд (UTC).
+    version: 2,
+    name: '002_accounts',
+    sql: `
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL,
+        username_key TEXT NOT NULL UNIQUE,
+        display_name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        recovery_hash TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        password_changed_at INTEGER NOT NULL
+      ) STRICT;
+
+      CREATE TABLE sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        token_hash TEXT NOT NULL UNIQUE,
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        user_agent TEXT NOT NULL DEFAULT ''
+      ) STRICT;
+
+      CREATE INDEX sessions_user_idx ON sessions (user_id);
+      CREATE INDEX sessions_expires_idx ON sessions (expires_at);
+
+      UPDATE system_settings
+      SET value = '3', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE key = 'platform_stage';
+    `,
+  },
 ];
 
 export function openDatabase(dbPath) {

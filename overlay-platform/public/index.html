@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <title>krafen studio — интерактивные оверлеи для стримов</title>
+  <meta name="description" content="Платформа интерактивных оверлеев для OBS: одна сцена на площадку, совместная работа с модераторами и мгновенная передача изменений в эфир.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/styles/fonts.css">
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/atmosphere.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <link rel="stylesheet" href="/styles/layout.css">
+  <script type="module" src="/js/pages/home.js"></script>
+</head>
+<body>
+  <!-- Атмосфера: свечение, дождь, туман, вспышки, виньетка и зерно -->
+  <div id="glow" aria-hidden="true"></div>
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <div class="fog" aria-hidden="true"></div>
+  <div class="fog f2" aria-hidden="true"></div>
+  <div id="flash" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <nav class="topnav" aria-label="Разделы платформы">
+    <a class="brand" href="/" aria-label="krafen studio — на главную">
+      <span class="brand-word">kra<em>fen</em></span>
+      <span class="brand-tag">overlay studio</span>
+    </a>
+    <div class="topnav-links">
+      <a class="active" href="/" aria-current="page">Главная</a>
+      <a href="/app">Рабочая среда</a>
+    </div>
+    <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav">Меню</button>
+  </nav>
+
+  <nav class="mobile-nav" id="mobile-nav" aria-label="Меню">
+    <button class="mobile-nav-close" type="button" aria-label="Закрыть меню">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+    <a class="active" href="#hero">Главная</a>
+    <a href="#live">Что уже работает</a>
+    <a href="#sources">Источники сцены</a>
+    <a href="#ui">Элементы интерфейса</a>
+    <a href="/app">Рабочая среда</a>
+  </nav>
+
+  <!-- Боковой указатель секций -->
+  <div class="rail-line" aria-hidden="true"></div>
+  <div class="rail-progress" id="rail-progress" aria-hidden="true"></div>
+  <nav class="rail" aria-label="Секции страницы">
+    <a href="#hero" data-sec="hero"><span class="dot"></span><span class="lbl">начало</span></a>
+    <a href="#live" data-sec="live"><span class="dot"></span><span class="lbl">работает</span></a>
+    <a href="#sources" data-sec="sources"><span class="dot"></span><span class="lbl">источники</span></a>
+    <a href="#ui" data-sec="ui"><span class="dot"></span><span class="lbl">интерфейс</span></a>
+  </nav>
+
+  <main>
+    <!-- 01 / Первый экран -->
+    <section class="section hero-section" id="hero">
+      <div class="ghost-num" aria-hidden="true">01</div>
+      <div>
+        <div class="hero-status-row">
+          <span class="status-badge muted" id="hero-health-badge"><span class="dot"></span>проверяю сервер…</span>
+          <span class="status-badge crimson">этап 2 из 9 · основа</span>
+        </div>
+        <div class="hero-eyebrow">browser source · live sync · moderators</div>
+        <h1 class="hero-display">kra<span class="grad">fen</span> studio</h1>
+        <p class="hero-lead">
+          Платформа интерактивных оверлеев для стримов. Одна сцена на площадку,
+          прозрачная страница для <em>OBS Browser Source</em> и совместная работа
+          стримера с модераторами — правки видны в эфире сразу.
+        </p>
+        <div class="hero-actions">
+          <a class="btn-primary" href="/app">Открыть рабочую среду</a>
+          <button class="btn-ghost" type="button" data-open-modal="modal-obs-flow">Как это работает с OBS</button>
+          <a class="btn-ghost" href="#ui">Элементы интерфейса</a>
+        </div>
+      </div>
+      <div class="scroll-cue" aria-hidden="true"><div class="wheel"></div>листай</div>
+    </section>
+
+    <!-- 02 / Живые показатели сервера -->
+    <section class="section" id="live">
+      <div class="ghost-num" aria-hidden="true">02</div>
+      <div class="reveal">
+        <div class="sec-eyebrow">01 / проверка вживую</div>
+        <h2 class="sec-heading">Что уже работает</h2>
+        <p class="sec-sub">
+          Три показателя ниже приходят с настоящего сервера прямо сейчас — это не картинка
+          и не заготовка. На этом фундаменте дальше строятся вход, площадки, редактор и сам оверлей.
+        </p>
+      </div>
+
+      <div class="grid-3 section-body">
+        <div class="glass pad-card stat-card reveal" style="--d: 0.06s;">
+          <div class="row between">
+            <span class="card-label">Хранилище данных</span>
+            <span class="status-badge muted" id="db-badge"><span class="dot"></span>проверка</span>
+          </div>
+          <div class="stat-value" id="db-state-val">—</div>
+          <p class="stat-note">Здесь будут храниться аккаунты, площадки и сцены.</p>
+          <div class="kv-row divided">
+            <span>Защита от потери данных при сбое</span>
+            <strong id="db-safe-val">—</strong>
+          </div>
+        </div>
+
+        <div class="glass pad-card stat-card reveal" style="--d: 0.12s;">
+          <div class="row between">
+            <span class="card-label">Живой канал связи</span>
+            <span class="status-badge muted" id="ws-badge"><span class="dot"></span>подключение</span>
+          </div>
+          <div class="stat-value mono" id="ws-rtt-val">— мс</div>
+          <p class="stat-note">По этому каналу правки из редактора будут мгновенно попадать в OBS.</p>
+          <div class="row between divided">
+            <span class="kv-inline">Открыто окон: <strong id="ws-clients-val">0</strong></span>
+            <button class="btn-action" type="button" id="ws-ping-btn" aria-label="Замерить задержку заново">Замерить</button>
+          </div>
+        </div>
+
+        <div class="glass pad-card stat-card reveal" style="--d: 0.18s;">
+          <div class="row between">
+            <span class="card-label">Структура данных</span>
+            <span class="status-badge muted" id="schema-badge"><span class="dot"></span>проверка</span>
+          </div>
+          <div class="stat-value" id="schema-ver-val">—</div>
+          <p class="stat-note">При обновлении платформы база достраивается сама, без потери данных.</p>
+          <div class="kv-row divided">
+            <span>Контроль связей между данными</span>
+            <strong id="db-fk-val">—</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 / Типы источников -->
+    <section class="section" id="sources">
+      <div class="ghost-num" aria-hidden="true">03</div>
+      <div class="reveal">
+        <div class="sec-eyebrow">02 / из чего состоит сцена</div>
+        <h2 class="sec-heading">Источники сцены</h2>
+        <p class="sec-sub">
+          У площадки одна общая сцена, на ней размещаются источники. У каждого типа свои
+          настройки, а не один универсальный блок на все случаи.
+        </p>
+        <p style="margin-top: 16px;">
+          <span class="status-badge amber">в плане · редактор собирается на этапе 5</span>
+        </p>
+      </div>
+
+      <div class="grid-3 section-body">
+        <article class="glass lift source-card reveal">
+          <div class="source-card-top">
+            <div class="source-ico">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></svg>
+            </div>
+            <span class="status-badge muted">text</span>
+          </div>
+          <h3 class="source-title">Текст</h3>
+          <p class="source-desc">Заголовки, подписи и плашки. Шрифт, размер, цвет, обводка, тень и подложка.</p>
+          <div class="source-props">
+            <span class="prop-chip">шрифт</span>
+            <span class="prop-chip">обводка</span>
+            <span class="prop-chip">тень</span>
+            <span class="prop-chip">подложка</span>
+          </div>
+        </article>
+
+        <article class="glass lift source-card reveal" style="--d: 0.05s;">
+          <div class="source-card-top">
+            <div class="source-ico">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>
+            </div>
+            <span class="status-badge muted">image · gif</span>
+          </div>
+          <h3 class="source-title">Изображения и GIF</h3>
+          <p class="source-desc">Картинки с прозрачностью и анимированные GIF. Загрузка файла, скругление углов, рамка.</p>
+          <div class="source-props">
+            <span class="prop-chip">файл</span>
+            <span class="prop-chip">скругление</span>
+            <span class="prop-chip">прозрачность</span>
+            <span class="prop-chip">пропорции</span>
+          </div>
+        </article>
+
+        <article class="glass lift source-card reveal" style="--d: 0.1s;">
+          <div class="source-card-top">
+            <div class="source-ico">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="6 4 19 12 6 20 6 4"/></svg>
+            </div>
+            <span class="status-badge muted">video</span>
+          </div>
+          <h3 class="source-title">Видео</h3>
+          <p class="source-desc">Ролики MP4 и WebM, в том числе с прозрачным фоном. Повтор, громкость и скорость.</p>
+          <div class="source-props">
+            <span class="prop-chip">повтор</span>
+            <span class="prop-chip">громкость</span>
+            <span class="prop-chip">без звука</span>
+            <span class="prop-chip">скорость</span>
+          </div>
+        </article>
+
+        <article class="glass lift source-card reveal">
+          <div class="source-card-top">
+            <div class="source-ico">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="4"/></svg>
+            </div>
+            <span class="status-badge muted">shape</span>
+          </div>
+          <h3 class="source-title">Фигуры и блоки</h3>
+          <p class="source-desc">Подложки под камеру и чат, рамки, разделители, градиенты и тёмное стекло.</p>
+          <div class="source-props">
+            <span class="prop-chip">заливка</span>
+            <span class="prop-chip">градиент</span>
+            <span class="prop-chip">рамка</span>
+            <span class="prop-chip">радиус</span>
+          </div>
+        </article>
+
+        <article class="glass lift source-card reveal" style="--d: 0.05s;">
+          <div class="source-card-top">
+            <div class="source-ico">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg>
+            </div>
+            <span class="status-badge muted">timer</span>
+          </div>
+          <h3 class="source-title">Таймеры</h3>
+          <p class="source-desc">Обратный отсчёт до эфира, секундомер и часы. Время сверяется с сервером, поэтому у всех совпадает.</p>
+          <div class="source-props">
+            <span class="prop-chip">отсчёт</span>
+            <span class="prop-chip">секундомер</span>
+            <span class="prop-chip">часы</span>
+            <span class="prop-chip">пауза</span>
+          </div>
+        </article>
+
+        <article class="glass lift source-card reveal" style="--d: 0.1s;">
+          <div class="source-card-top">
+            <div class="source-ico">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5ZM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            </div>
+            <span class="status-badge muted">widget</span>
+          </div>
+          <h3 class="source-title">Виджеты</h3>
+          <p class="source-desc">Шкала цели, бегущая строка, карточка эфира и собственный блок на HTML.</p>
+          <div class="source-props">
+            <span class="prop-chip">цель</span>
+            <span class="prop-chip">бегущая строка</span>
+            <span class="prop-chip">свой блок</span>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- 04 / Элементы интерфейса -->
+    <section class="section" id="ui">
+      <div class="ghost-num" aria-hidden="true">04</div>
+      <div class="reveal">
+        <div class="sec-eyebrow">03 / общий язык всех экранов</div>
+        <h2 class="sec-heading">Элементы интерфейса</h2>
+        <p class="sec-sub">
+          Шрифты, карточки и элементы управления, из которых будут собраны кабинет и редактор.
+          Всё рабочее: поля можно править, ползунок двигать, окно и уведомление открывать.
+        </p>
+      </div>
+
+      <div class="grid-2 section-body">
+        <div class="glass pad-card reveal">
+          <div class="card-label">Пять шрифтов krafen.me</div>
+          <div class="stack" style="margin-top: 14px;">
+            <div class="inner-box">
+              <div class="type-sample-label">Medula One · акценты и цифры</div>
+              <div class="type-display">SCENE 01 // 1920 × 1080</div>
+            </div>
+            <div class="inner-box">
+              <div class="type-sample-label">Alice и Cormorant Infant · заголовки и подписи</div>
+              <div class="type-heading">Площадка основного канала</div>
+              <div class="type-serif">Одна сцена, которую видят и редактор, и OBS</div>
+            </div>
+            <div class="inner-box">
+              <div class="type-sample-label">Manrope и JetBrains Mono · интерфейс и числа</div>
+              <div class="row between" style="margin-top: 8px;">
+                <span style="font-size: 13px; color: var(--silver-bright);">Слой «Таймер старта» включён</span>
+                <span class="mono" style="font-size: 12px; color: var(--crimson-light);">X 1420 · Y 64 · 460 × 108</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass pad-card reveal" style="--d: 0.08s;">
+          <div class="card-label">Элементы управления</div>
+
+          <div class="field" style="margin-top: 14px;">
+            <label class="field-label" for="demo-source-name">Название источника</label>
+            <input class="kf-input studio" id="demo-source-name" type="text" value="Плашка текущего трека" autocomplete="off">
+          </div>
+
+          <div class="field">
+            <div class="field-grid-4">
+              <div>
+                <label class="field-label" for="demo-x">X</label>
+                <input class="kf-input studio mono-val" id="demo-x" type="number" value="64" inputmode="numeric">
+              </div>
+              <div>
+                <label class="field-label" for="demo-y">Y</label>
+                <input class="kf-input studio mono-val" id="demo-y" type="number" value="912" inputmode="numeric">
+              </div>
+              <div>
+                <label class="field-label" for="demo-w">Ширина</label>
+                <input class="kf-input studio mono-val" id="demo-w" type="number" value="460" inputmode="numeric">
+              </div>
+              <div>
+                <label class="field-label" for="demo-h">Высота</label>
+                <input class="kf-input studio mono-val" id="demo-h" type="number" value="108" inputmode="numeric">
+              </div>
+            </div>
+          </div>
+
+          <div class="field">
+            <label class="field-label" for="demo-opacity">
+              <span>Непрозрачность</span>
+              <strong class="mono" id="demo-opacity-label" style="color: var(--silver-bright); font-weight: 400;">92%</strong>
+            </label>
+            <input class="kf-range" id="demo-opacity" type="range" min="0" max="100" value="92">
+          </div>
+
+          <div class="row between divided" style="padding-bottom: 14px; border-bottom: 1px solid var(--line-subtle); margin-bottom: 18px;">
+            <label class="kf-switch">
+              <input type="checkbox" id="demo-lock-switch" checked>
+              <span class="kf-switch-track"></span>
+              <span>Защита от случайного сдвига</span>
+            </label>
+            <span class="status-badge live"><span class="dot"></span>сохранено</span>
+          </div>
+
+          <div class="row">
+            <button class="btn-primary sm" type="button" id="demo-toast-btn">Показать уведомление</button>
+            <button class="btn-ghost sm" type="button" data-open-modal="modal-obs-flow">Открыть окно</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass pad-card reveal" style="margin-top: 20px;">
+        <div class="row between">
+          <span class="card-label">Проба: так будут устроены настройки текста</span>
+          <span class="status-badge amber">образец · сам редактор — этап 5</span>
+        </div>
+
+        <div class="grid-2" style="margin-top: 18px;">
+          <div>
+            <div class="field">
+              <label class="field-label" for="demo-text">Текст</label>
+              <textarea class="kf-area" id="demo-text" maxlength="80" rows="2">Начинаем через пять минут</textarea>
+              <div class="field-hint">До 80 символов. Образец рядом меняется по мере ввода.</div>
+            </div>
+
+            <div class="warn-box" id="demo-text-warn" style="margin-bottom: 16px;" hidden>
+              Пустой текст в эфире не будет виден.
+            </div>
+
+            <div class="field">
+              <div class="field-grid-2">
+                <div>
+                  <label class="field-label" for="demo-font">Шрифт</label>
+                  <select class="kf-select studio" id="demo-font">
+                    <option value="heading" selected>Alice</option>
+                    <option value="serif">Cormorant Infant</option>
+                    <option value="sans">Manrope</option>
+                    <option value="mono">JetBrains Mono</option>
+                  </select>
+                </div>
+                <div>
+                  <div class="field-label" id="demo-align-label">Выравнивание</div>
+                  <div class="row" role="group" aria-labelledby="demo-align-label" style="gap: 6px;">
+                    <button class="filter-pill" type="button" data-align="left" aria-pressed="false">Слева</button>
+                    <button class="filter-pill active" type="button" data-align="center" aria-pressed="true">Центр</button>
+                    <button class="filter-pill" type="button" data-align="right" aria-pressed="false">Справа</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <button class="btn-ghost sm danger" type="button" id="demo-text-reset">Сбросить</button>
+          </div>
+
+          <div class="stage-preview-frame" style="align-self: center;">
+            <div class="text-sample" id="demo-text-sample">Начинаем через пять минут</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="foot-brand">KRAFEN STUDIO</div>
+    <div>интерактивные оверлеи для стримов · в разработке</div>
+  </footer>
+
+  <!-- Нижний док -->
+  <div class="dock">
+    <a class="dock-box" href="#hero" aria-label="Наверх">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+      <span class="hide-mobile">Наверх</span>
+    </a>
+    <button class="dock-box" type="button" data-atmo-toggle aria-pressed="true" aria-label="Включить или приглушить дождь и туман">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12L13 2Z"/></svg>
+      <span data-atmo-label data-on="Атмосфера" data-off="Штиль">Атмосфера</span>
+    </button>
+  </div>
+
+  <!-- Окно: как площадка работает с OBS -->
+  <div class="modal" id="modal-obs-flow" role="dialog" aria-modal="true" aria-labelledby="modal-obs-title">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div>
+          <div class="modal-eyebrow">как это будет устроено</div>
+          <h3 class="modal-title" id="modal-obs-title">Как площадка работает с OBS</h3>
+        </div>
+        <button class="icon-btn" type="button" data-close-modal="modal-obs-flow" aria-label="Закрыть">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+
+      <div class="stack" style="gap: 12px;">
+        <div class="inner-box">
+          <div class="card-label" style="color: var(--crimson-light);">1 · ссылка площадки</div>
+          <p class="stat-note">
+            У каждой площадки своя ссылка на оверлей. По ней открывается только сцена
+            на прозрачном фоне — без кнопок, панелей и кабинета.
+          </p>
+        </div>
+        <div class="inner-box">
+          <div class="card-label" style="color: var(--crimson-light);">2 · источник «Браузер» в OBS</div>
+          <p class="stat-note">
+            Стример один раз вставляет ссылку в OBS как Browser Source. Больше в OBS ничего
+            настраивать не нужно.
+          </p>
+        </div>
+        <div class="inner-box">
+          <div class="card-label" style="color: var(--crimson-light);">3 · правки вживую</div>
+          <p class="stat-note">
+            Владелец и модераторы двигают объекты, меняют текст, картинки и таймеры в редакторе —
+            изменения сохраняются и сразу появляются в эфире, без перезагрузки страницы.
+          </p>
+        </div>
+      </div>
+
+      <div class="modal-foot">
+        <button class="btn-ghost sm" type="button" data-close-modal="modal-obs-flow">Понятно</button>
+        <a class="btn-primary sm" href="/app">Открыть рабочую среду</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

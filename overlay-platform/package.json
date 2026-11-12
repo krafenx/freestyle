@@ -1,0 +1,24 @@
+{
+  "name": "krafen-overlay-platform",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Платформа интерактивных стрим-оверлеев для OBS в визуальной системе krafen.me",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "start": "node --no-warnings=ExperimentalWarning src/server/index.js",
+    "dev": "node --no-warnings=ExperimentalWarning --watch src/server/index.js",
+    "test": "node --no-warnings=ExperimentalWarning --test --test-reporter=spec test/*.test.js"
+  },
+  "dependencies": {
+    "@fontsource/alice": "^5.3.0",
+    "@fontsource/cormorant-infant": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@fontsource/manrope": "^5.3.0",
+    "@fontsource/medula-one": "^5.3.0",
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  }
+}

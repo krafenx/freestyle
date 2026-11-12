@@ -1,0 +1,181 @@
+/* ==========================================================================
+   Krafen Studio — основа дизайн-системы платформы стрим-оверлеев.
+   Палитра, шрифты и кривые движения взяты из krafen.me (style.css),
+   поверх них добавлено то, что нужно рабочему инструменту:
+   читаемые подписи, цвета состояний, слои и «шахматка» прозрачного холста.
+   ========================================================================== */
+
+:root {
+  color-scheme: dark;
+
+  /* Базовая палитра — значения оригинала */
+  --void: #050505;
+  --abyss: #0a0a0c;
+  --silver: #a0a0a0;
+  --silver-dim: #666666;
+  --silver-bright: #e0e0e0;
+  --crimson: #7c0a0a;
+  --crimson-bright: #a31313;
+  --crimson-light: #ff7a7a;
+  --glass: rgba(12, 12, 15, 0.66);
+  --glass-border: rgba(160, 160, 160, 0.13);
+  --line: rgba(160, 160, 160, 0.16);
+
+  /* Дополнения для рабочей среды */
+  --white: #f5f5f5;
+  --label: #8b8b93; /* подписи полей: светлее --silver-dim, чтобы не уставали глаза за долгую смену */
+  --glass-card: rgba(12, 12, 16, 0.78);
+  --glass-border-strong: rgba(160, 160, 160, 0.26);
+  --line-subtle: rgba(255, 255, 255, 0.06);
+
+  /* Состояния: готово, ожидание, ошибка */
+  --ok: #22c55e;
+  --ok-soft: rgba(22, 163, 74, 0.15);
+  --ok-border: rgba(34, 197, 94, 0.36);
+  --warn-soft: rgba(217, 119, 6, 0.15);
+  --warn-border: rgba(245, 158, 11, 0.38);
+  --danger-text: #fca5a5;
+
+  /* Холст редактора: тёмная «шахматка» обозначает прозрачные места сцены */
+  --checker-a: #0b0b0e;
+  --checker-b: #121217;
+
+  /* Типографика оригинала */
+  --font-display: "Medula One", "Arial Narrow", sans-serif;
+  --font-heading: "Alice", "Cormorant Infant", serif;
+  --font-serif: "Cormorant Infant", Georgia, serif;
+  --font-sans: "Manrope", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Скругления: мелкие элементы → вложенные блоки → карточки → окна */
+  --radius-sm: 12px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 20px;
+  --radius-pill: 999px;
+
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-soft: cubic-bezier(0.22, 0.8, 0.24, 1);
+
+  /* Порядок слоёв (как на krafen.me): фон → содержимое → туман → дождь →
+     виньетка → зерно → вспышка → док → навигация → меню → окна → уведомления */
+  --z-glow: 0;
+  --z-content: 10;
+  --z-fog: 30;
+  --z-rain: 40;
+  --z-vignette: 45;
+  --z-grain: 46;
+  --z-flash: 50;
+  --z-rail: 55;
+  --z-dock: 60;
+  --z-nav: 70;
+  --z-drawer: 95;
+  --z-modal: 120;
+  --z-toast: 220;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  background: var(--void);
+  overflow-x: clip;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Плавный переход к разделу по ссылке внутри страницы */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+body {
+  background: var(--void);
+  color: var(--white);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.55;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.nav-open,
+body.modal-open {
+  overflow: hidden;
+}
+
+a,
+button,
+input,
+select,
+textarea {
+  touch-action: manipulation;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+::selection {
+  background: rgba(124, 10, 10, 0.6);
+  color: #fff;
+}
+
+[hidden],
+.hidden {
+  display: none !important;
+}
+
+/* Видимая рамка при управлении с клавиатуры (мышью не показывается) */
+:focus-visible {
+  outline: 2px solid rgba(255, 122, 122, 0.75);
+  outline-offset: 3px;
+}
+
+/* Тонкие полосы прокрутки в серебристо-багровой гамме */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: var(--radius-pill);
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(214, 214, 228, 0.22), rgba(150, 150, 168, 0.15));
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(236, 236, 246, 0.38), rgba(163, 19, 19, 0.48));
+  border-color: rgba(255, 255, 255, 0.18);
+}
+::-webkit-scrollbar-thumb:active {
+  background: rgba(163, 19, 19, 0.72);
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(200, 200, 214, 0.24) transparent;
+  }
+}

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <title>Рабочая среда — krafen studio</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/styles/fonts.css">
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/atmosphere.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <link rel="stylesheet" href="/styles/layout.css">
+  <script type="module" src="/js/pages/shell.js"></script>
+</head>
+<!-- studio: атмосфера уходит под панели; calm: дождь и туман по умолчанию выключены -->
+<body class="studio calm">
+  <div id="glow" aria-hidden="true"></div>
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <div class="fog" aria-hidden="true"></div>
+  <div id="flash" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <nav class="topnav" aria-label="Верхняя панель">
+    <a class="brand" href="/" aria-label="krafen studio — на главную">
+      <span class="brand-word">kra<em>fen</em></span>
+      <span class="brand-tag">workspace</span>
+    </a>
+    <div class="topnav-links">
+      <a href="/">Главная</a>
+      <a class="active" href="/app" aria-current="page">Рабочая среда</a>
+    </div>
+    <div class="topnav-right">
+      <span class="status-badge muted" id="shell-ws-status"><span class="dot"></span>связь…</span>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav">Меню</button>
+    </div>
+  </nav>
+
+  <nav class="mobile-nav" id="mobile-nav" aria-label="Меню">
+    <button class="mobile-nav-close" type="button" aria-label="Закрыть меню">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+    <a href="/">Главная</a>
+    <a class="active" href="/app">Рабочая среда</a>
+  </nav>
+
+  <div class="workspace-layout">
+    <!-- Боковая панель кабинета -->
+    <aside class="glass workspace-sidebar">
+      <div>
+        <div class="card-label">рабочая среда</div>
+        <div class="sidebar-title">Кабинет</div>
+      </div>
+
+      <div class="sidebar-nav" role="tablist" aria-label="Разделы">
+        <button class="sidebar-link active" type="button" role="tab" id="tab-plan" aria-selected="true" aria-controls="pane-plan">
+          <span>План работ</span>
+          <span class="mono">2 / 9</span>
+        </button>
+        <button class="sidebar-link" type="button" role="tab" id="tab-editor" aria-selected="false" aria-controls="pane-editor" tabindex="-1">
+          <span>Каркас редактора</span>
+          <span class="mono">16:9</span>
+        </button>
+      </div>
+
+      <div class="notice-box">
+        Вход в аккаунт появится здесь на <strong>этапе 3</strong>, площадки и приглашение
+        модераторов — на <strong>этапе 4</strong>.
+      </div>
+
+      <button class="btn-action" type="button" data-atmo-toggle aria-pressed="false">
+        <span data-atmo-label data-on="Дождь на фоне: вкл" data-off="Дождь на фоне: выкл">Дождь на фоне: выкл</span>
+      </button>
+    </aside>
+
+    <div class="workspace-main">
+      <!-- Раздел 1: план работ с честными статусами -->
+      <section id="pane-plan" role="tabpanel" aria-labelledby="tab-plan" class="stack" style="gap: 20px;">
+        <div class="glass pad-card">
+          <div class="sec-eyebrow" style="margin-bottom: 12px;">этап 2 из 9 завершён</div>
+          <h1 class="pane-title">План работ</h1>
+          <p class="sec-sub" style="margin-top: 10px; max-width: 680px;">
+            Готовы фундамент и общий внешний вид: сервер, база данных, живой канал связи,
+            шрифты, зерно и элементы интерфейса. Ниже — что уже сделано и что на очереди.
+          </p>
+        </div>
+
+        <div class="grid-3">
+          <div class="glass pad-card-sm">
+            <div class="row between">
+              <span class="card-label mono">этап 01</span>
+              <span class="status-badge ok"><span class="dot"></span>готово</span>
+            </div>
+            <div class="stage-card-title">Изучение и план</div>
+            <p class="stage-card-text">Изучены оба репозитория, выбрано устройство платформы, составлен план.</p>
+          </div>
+
+          <div class="glass pad-card-sm">
+            <div class="row between">
+              <span class="card-label mono">этап 02</span>
+              <span class="status-badge ok"><span class="dot"></span>готово</span>
+            </div>
+            <div class="stage-card-title">Основа и внешний вид</div>
+            <p class="stage-card-text">Сервер, база, живой канал связи, шрифты, зерно и общие элементы интерфейса.</p>
+          </div>
+
+          <div class="glass pad-card-sm" style="border-color: rgba(163, 19, 19, 0.45);">
+            <div class="row between">
+              <span class="card-label mono" style="color: var(--crimson-light);">этап 03</span>
+              <span class="status-badge crimson"><span class="dot"></span>следующий</span>
+            </div>
+            <div class="stage-card-title">Вход и регистрация</div>
+            <p class="stage-card-text">Аккаунты, вход, выход и защита личных страниц.</p>
+          </div>
+
+          <div class="glass pad-card-sm">
+            <div class="row between">
+              <span class="card-label mono">этап 04</span>
+              <span class="status-badge muted">в очереди</span>
+            </div>
+            <div class="stage-card-title">Площадки и роли</div>
+            <p class="stage-card-text">Создание площадки, кабинет, приглашение и отзыв модераторов.</p>
+          </div>
+
+          <div class="glass pad-card-sm">
+            <div class="row between">
+              <span class="card-label mono">этап 05</span>
+              <span class="status-badge muted">в очереди</span>
+            </div>
+            <div class="stage-card-title">Редактор</div>
+            <p class="stage-card-text">Сцена, источники, слои, перемещение, размеры и настройки объектов.</p>
+          </div>
+
+          <div class="glass pad-card-sm">
+            <div class="row between">
+              <span class="card-label mono">этап 06</span>
+              <span class="status-badge muted">в очереди</span>
+            </div>
+            <div class="stage-card-title">Оверлей для OBS</div>
+            <p class="stage-card-text">Ссылка площадки, прозрачный фон, точное отображение сцены.</p>
+          </div>
+
+          <div class="glass pad-card-sm">
+            <div class="row between">
+              <span class="card-label mono">этап 07</span>
+              <span class="status-badge muted">в очереди</span>
+            </div>
+            <div class="stage-card-title">Синхронизация</div>
+            <p class="stage-card-text">Мгновенная передача правок в OBS и между модераторами.</p>
+          </div>
+
+          <div class="glass pad-card-sm">
+            <div class="row between">
+              <span class="card-label mono">этап 08</span>
+              <span class="status-badge muted">в очереди</span>
+            </div>
+            <div class="stage-card-title">Проверка и улучшение</div>
+            <p class="stage-card-text">Безопасность, телефоны, скорость работы и внешний вид.</p>
+          </div>
+
+          <div class="glass pad-card-sm">
+            <div class="row between">
+              <span class="card-label mono">этап 09</span>
+              <span class="status-badge muted">в очереди</span>
+            </div>
+            <div class="stage-card-title">Подготовка к запуску</div>
+            <p class="stage-card-text">Настройка сервера, резервные копии и публикация.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Раздел 2: раскладка будущего редактора -->
+      <section id="pane-editor" role="tabpanel" aria-labelledby="tab-editor" hidden>
+        <div class="glass pad-card-sm row between" style="margin-bottom: 16px;">
+          <div>
+            <div class="card-label">раскладка рабочего места</div>
+            <h1 class="pane-title" style="font-size: 24px; margin-top: 4px;">Каркас редактора</h1>
+          </div>
+          <span class="status-badge amber">макет · объекты появятся на этапе 5</span>
+        </div>
+
+        <div class="studio-skeleton">
+          <div class="glass pad-card-sm studio-col">
+            <div class="field-label" style="margin: 0;">Слои</div>
+            <div class="empty-box" style="padding: 26px 14px;">
+              <div class="big" style="font-size: 32px;">00</div>
+              <p style="font-size: 15px;">Здесь будет список источников: порядок, видимость и защита от сдвига</p>
+            </div>
+          </div>
+
+          <div class="glass pad-card-sm studio-col">
+            <div class="row between">
+              <span class="field-label" style="margin: 0;">Сцена</span>
+              <span class="mono" style="font-size: 11px; color: var(--label);">1920 × 1080</span>
+            </div>
+            <div class="stage-preview-frame">
+              <div class="stage-placeholder">
+                <div class="big">1920 × 1080</div>
+                <p>Тёмная клетка — прозрачный фон. В OBS на этом месте будет видна игра или камера</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass pad-card-sm studio-col">
+            <div class="field-label" style="margin: 0;">Свойства</div>
+            <div class="notice-box">
+              Здесь будут настройки выбранного источника — свои для текста, картинки, видео,
+              фигуры, таймера и виджета.
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</body>
+</html>

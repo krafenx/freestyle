@@ -1,0 +1,12 @@
+/* Локально раздаваемые шрифты платформы (@fontsource/*) — работают без внешних CDN и в OBS Browser Source */
+@import url("/vendor/fonts/medula-one/400.css");
+@import url("/vendor/fonts/alice/400.css");
+@import url("/vendor/fonts/cormorant-infant/400.css");
+@import url("/vendor/fonts/cormorant-infant/400-italic.css");
+@import url("/vendor/fonts/cormorant-infant/500.css");
+@import url("/vendor/fonts/manrope/300.css");
+@import url("/vendor/fonts/manrope/400.css");
+@import url("/vendor/fonts/manrope/500.css");
+@import url("/vendor/fonts/manrope/600.css");
+@import url("/vendor/fonts/jetbrains-mono/400.css");
+@import url("/vendor/fonts/jetbrains-mono/700.css");

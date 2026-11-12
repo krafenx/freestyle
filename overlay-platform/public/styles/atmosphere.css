@@ -1,0 +1,170 @@
+/* ==========================================================================
+   Атмосфера krafen.me: свечение, туман, дождь, вспышки, виньетка и зерно.
+
+   Обычные страницы повторяют оригинал слой в слой: дождь, туман и виньетка
+   лежат ПОВЕРХ содержимого — отсюда ощущение глубины.
+
+   В рабочей среде (body.studio) те же слои уходят ПОД панели, а дождь по
+   умолчанию выключен: инструменту нельзя мешать работе. Зерно остаётся
+   поверх всего в обоих режимах — это главная фактура стиля.
+   ========================================================================== */
+
+/* Тёмный фон с багровым отсветом слева сверху */
+#glow {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-glow);
+  pointer-events: none;
+  background:
+    radial-gradient(46% 34% at 20% 18%, rgba(124, 10, 10, 0.17), transparent 65%),
+    radial-gradient(120% 90% at 50% -10%, #101018 0%, var(--abyss) 45%, var(--void) 100%);
+  transform: translate3d(0, 0, 0);
+  backface-visibility: hidden;
+}
+
+/* Дождь рисуется скриптом на холсте (core/atmosphere.js) */
+#rain {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-rain);
+  pointer-events: none;
+  opacity: 0.45;
+  transition: opacity 1.2s ease;
+  transform: translateZ(0);
+}
+
+/* Медленно дрейфующая дымка у нижних углов */
+.fog {
+  position: fixed;
+  inset: -16%;
+  z-index: var(--z-fog);
+  pointer-events: none;
+  background:
+    radial-gradient(44% 32% at 18% 82%, rgba(160, 160, 160, 0.052), transparent 72%),
+    radial-gradient(52% 36% at 82% 76%, rgba(160, 160, 160, 0.042), transparent 72%);
+  animation: kf-fogdrift 32s ease-in-out infinite alternate;
+  will-change: transform;
+  backface-visibility: hidden;
+  transition: opacity 1.2s ease;
+}
+
+.fog.f2 {
+  animation-duration: 42s;
+  animation-direction: alternate-reverse;
+  opacity: 0.7;
+}
+
+@keyframes kf-fogdrift {
+  from {
+    transform: translate3d(-3%, 1%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(3%, -2%, 0) scale(1.05);
+  }
+}
+
+/* Вспышка молнии: холодный свет на долю секунды */
+#flash {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-flash);
+  pointer-events: none;
+  background: #cdd6ff;
+  opacity: 0;
+  will-change: opacity;
+}
+
+/* Затемнение к углам экрана */
+.vignette {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-vignette);
+  pointer-events: none;
+  background: radial-gradient(95% 90% at 50% 45%, transparent 58%, rgba(0, 0, 0, 0.72) 100%);
+  transform: translateZ(0);
+}
+
+/* Зерно. Сама фактура создаётся скриптом initGrain(): плитка 128×128 точек
+   случайной яркости, один в один как на krafen.me. Картинок-заготовок нет. */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-grain);
+  pointer-events: none;
+  opacity: 0.038;
+  background-repeat: repeat;
+  background-size: 128px 128px;
+  transform: translateZ(0);
+}
+
+/* «Штиль»: кнопка «Атмосфера» приглушает дождь и убирает туман */
+body.calm #rain {
+  opacity: 0.1;
+}
+
+body.calm .fog {
+  opacity: 0;
+  animation-play-state: paused;
+}
+
+/* ---------- Рабочая среда: атмосфера под панелями ---------- */
+body.studio #glow {
+  background:
+    radial-gradient(46% 34% at 20% 18%, rgba(124, 10, 10, 0.11), transparent 65%),
+    radial-gradient(120% 90% at 50% -10%, #101018 0%, var(--abyss) 45%, var(--void) 100%);
+}
+
+body.studio .fog {
+  z-index: 1;
+}
+
+body.studio #rain {
+  z-index: 2;
+  opacity: 0.32;
+}
+
+body.studio #flash {
+  z-index: 3;
+}
+
+body.studio .vignette {
+  z-index: 4;
+}
+
+/* В спокойном режиме студии дождя и тумана нет совсем — браузер их даже не рисует */
+body.studio.calm #rain,
+body.studio.calm .fog {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.6s ease, visibility 0s linear 0.6s;
+}
+
+/* ---------- Появление блоков при прокрутке ---------- */
+.reveal {
+  opacity: 0;
+  filter: blur(6px);
+  transform: translate3d(0, 22px, 0);
+  transition:
+    opacity 0.78s var(--ease),
+    transform 0.78s var(--ease),
+    filter 0.72s var(--ease);
+  transition-delay: var(--d, 0s);
+}
+
+.reveal.visible {
+  opacity: 1;
+  filter: none;
+  transform: translate3d(0, 0, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    transition: none;
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+  .fog {
+    animation: none;
+  }
+}

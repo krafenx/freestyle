@@ -1,0 +1,18 @@
+# Зависимости
+node_modules/
+
+# Рабочие данные платформы оверлеев: база, служебные файлы и загрузки пользователей.
+# В репозиторий попадает только пустая папка uploads (через .gitkeep).
+overlay-platform/data/*
+!overlay-platform/data/uploads/
+overlay-platform/data/uploads/*
+!overlay-platform/data/uploads/.gitkeep
+
+# Секреты и локальные настройки
+.env
+.env.*
+!.env.example
+
+# Системные файлы и журналы
+.DS_Store
+*.log

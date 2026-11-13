@@ -330,6 +330,18 @@
   color: #fff;
 }
 
+.btn-ghost:disabled,
+.btn-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+  transform: none;
+}
+
+/* Кнопка, по которой уже идёт отправка */
+[aria-busy="true"] {
+  cursor: progress;
+}
+
 .btn-primary:active,
 .btn-ghost:active,
 .btn-action:active,
@@ -486,6 +498,103 @@
   font-size: 11px;
   color: var(--label);
   line-height: 1.5;
+}
+
+.field-optional {
+  letter-spacing: 0.12em;
+  color: var(--silver-dim);
+}
+
+/* Сообщение об ошибке под полем */
+.field-error {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--danger-text);
+}
+
+.kf-input.invalid {
+  border-color: rgba(239, 68, 68, 0.62);
+}
+
+.kf-input.invalid:focus {
+  border-color: rgba(239, 68, 68, 0.8);
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.14);
+}
+
+/* Поле пароля с кнопкой «показать» внутри */
+.password-wrap {
+  position: relative;
+}
+
+.password-wrap .kf-input {
+  padding-right: 98px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  transform: translateY(-50%);
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--label);
+  font-family: var(--font-sans);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 0.25s var(--ease);
+}
+
+.password-toggle:hover,
+.password-toggle[aria-pressed="true"] {
+  color: #fff;
+}
+
+/* Флажок с подписью */
+.kf-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--silver-bright);
+  cursor: pointer;
+}
+
+.kf-check input {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  flex-shrink: 0;
+  accent-color: var(--crimson-bright);
+  cursor: pointer;
+}
+
+/* Код восстановления: крупно, моноширинно, выделяется одним нажатием */
+.code-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 16px;
+  border-radius: var(--radius-md);
+  border: 1px dashed rgba(255, 122, 122, 0.42);
+  background: rgba(124, 10, 10, 0.12);
+  text-align: center;
+}
+
+.code-value {
+  font-family: var(--font-mono);
+  font-size: clamp(15px, 4.6vw, 20px);
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  color: #fff;
+  user-select: all;
+  overflow-wrap: anywhere;
 }
 
 .field-grid-2 {
@@ -723,6 +832,14 @@
 .notice-box strong {
   color: var(--silver-bright);
   font-weight: 500;
+}
+
+.notice-box a,
+.warn-box a {
+  color: #fff;
+  text-decoration: underline;
+  text-decoration-color: rgba(255, 122, 122, 0.6);
+  text-underline-offset: 3px;
 }
 
 .warn-box {

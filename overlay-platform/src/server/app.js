@@ -2,6 +2,9 @@ import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import express from 'express';
+import { createAccounts } from './auth/accounts.js';
+import { createSessionCookies } from './auth/cookies.js';
+import { createAuthHttp, crossSiteGuard } from './auth/http.js';
 import { loadConfig } from './config.js';
 import { openDatabase } from './db/database.js';
 import { createRealtimeHub } from './ws/hub.js';
@@ -35,6 +38,20 @@ export function createOverlayServer(overrides = {}) {
   const httpServer = http.createServer(app);
   const realtime = createRealtimeHub(httpServer);
 
+  // Аккаунты. Часы, стоимость проверки пароля и пороги попыток подменяются только в проверках
+  const accounts = createAccounts({
+    db: db.raw,
+    registration: config.registration,
+    now: overrides.now,
+    passwordCost: overrides.passwordCost,
+    limits: overrides.authLimits,
+    sessionTtlMs: overrides.sessionTtlMs,
+  });
+  const authHttp = createAuthHttp({
+    accounts,
+    cookies: createSessionCookies({ mode: config.sessionCookieMode }),
+  });
+
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
 
@@ -44,6 +61,13 @@ export function createOverlayServer(overrides = {}) {
     res.setHeader('Content-Security-Policy', CONTENT_SECURITY_POLICY);
     next();
   });
+
+  // Команды с чужих сайтов отклоняются для всех адресов /api разом — и для будущих тоже
+  app.use('/api', crossSiteGuard);
+
+  // Вход, регистрация и настройки аккаунта
+  app.use('/api/auth', authHttp.authRouter);
+  app.use('/api/account', authHttp.accountRouter);
 
   app.use(express.json({ limit: '1mb' }));
 
@@ -66,7 +90,7 @@ export function createOverlayServer(overrides = {}) {
     res.json({
       ok: true,
       service: 'krafen-overlay-platform',
-      stage: 2,
+      stage: 3,
       serverTime: new Date().toISOString(),
       db: db.getHealth(),
       realtime: realtime.getStats(),
@@ -80,24 +104,43 @@ export function createOverlayServer(overrides = {}) {
   // Файлы интерфейса. no-cache = браузер каждый раз сверяется с сервером
   // и после обновления платформы не показывает устаревшую страницу.
   const pageOptions = { headers: { 'Cache-Control': 'no-cache' } };
+  // Страницы, связанные со входом, браузер не запоминает вовсе: после выхода
+  // кнопка «Назад» не должна показывать сохранённую копию кабинета.
+  const privatePageOptions = { headers: { 'Cache-Control': 'no-store' } };
+  const page = (file, options = pageOptions) => (_req, res) => {
+    res.sendFile(path.join(config.publicDir, file), options);
+  };
 
-  app.use(
-    express.static(config.publicDir, {
-      extensions: false,
-      index: false,
-      setHeaders(res) {
-        res.setHeader('Cache-Control', 'no-cache');
-      },
-    })
-  );
-
-  app.get('/', (_req, res) => {
-    res.sendFile(path.join(config.publicDir, 'index.html'), pageOptions);
+  const serveStatic = express.static(config.publicDir, {
+    extensions: false,
+    index: false,
+    setHeaders(res) {
+      res.setHeader('Cache-Control', 'no-cache');
+    },
   });
 
-  app.get('/app', (_req, res) => {
-    res.sendFile(path.join(config.publicDir, 'app.html'), pageOptions);
+  // Страницы отдаются только по своим адресам ниже (там же проверяется вход).
+  // Напрямую как файл — /app.html — страницу получить нельзя.
+  app.use((req, res, next) => {
+    let pathname = req.path;
+    try {
+      pathname = decodeURIComponent(req.path);
+    } catch {
+      // некорректный адрес разберёт следующий обработчик
+    }
+    if (/\.html?$/i.test(pathname)) return next();
+    return serveStatic(req, res, next);
   });
+
+  app.get('/', page('index.html'));
+
+  // Кабинет — только после входа
+  app.get('/app', authHttp.pageSession, authHttp.requireLoginPage, page('app.html', privatePageOptions));
+
+  // Вход, регистрация и восстановление — только для тех, кто ещё не вошёл
+  for (const name of ['login', 'register', 'recover']) {
+    app.get(`/${name}`, authHttp.pageSession, authHttp.guestOnlyPage, page(`${name}.html`, privatePageOptions));
+  }
 
   // Всё остальное — «не найдено»: человеку страница, программам короткий ответ
   app.use((req, res) => {
@@ -134,7 +177,20 @@ export function createOverlayServer(overrides = {}) {
     }
   });
 
+  // Раз в час убираем из базы истёкшие сеансы входа
+  let cleanupTimer = null;
+
   async function start() {
+    accounts.cleanup();
+    cleanupTimer = setInterval(() => {
+      try {
+        accounts.cleanup();
+      } catch (err) {
+        console.error('[krafen-overlay] Не удалось убрать истёкшие сеансы:', err);
+      }
+    }, 60 * 60 * 1000);
+    cleanupTimer.unref?.();
+
     await new Promise((resolve, reject) => {
       httpServer.once('error', reject);
       httpServer.listen(config.port, config.host, () => {
@@ -148,6 +204,7 @@ export function createOverlayServer(overrides = {}) {
   }
 
   async function stop() {
+    clearInterval(cleanupTimer);
     await realtime.close();
     await new Promise((resolve) => {
       if (!httpServer.listening) return resolve();
@@ -164,6 +221,7 @@ export function createOverlayServer(overrides = {}) {
     config,
     db,
     realtime,
+    accounts,
     start,
     stop,
   };

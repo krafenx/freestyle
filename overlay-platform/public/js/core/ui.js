@@ -3,20 +3,13 @@
    ползунки и боковой указатель секций.
    ========================================================================== */
 
-/* Любой текст, пришедший от пользователя или с сервера, перед вставкой
-   в разметку страницы пропускается через эту функцию. */
-export function escapeHTML(value) {
-  return String(value ?? '').replace(/[&<>"']/g, (ch) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-  }[ch]));
-}
+/* Текст от пользователя или с сервера вставляется на страницу только через
+   textContent — как текст, а не как разметка. Сборки разметки из строк
+   (innerHTML) в проекте нет: это проверяется тестом. */
 
 /* ---------- Всплывающее уведомление ---------- */
 let toastTimer = null;
+let toastFrame = null;
 
 export function toast(message, tone = 'default') {
   let el = document.getElementById('toast');
@@ -32,9 +25,14 @@ export function toast(message, tone = 'default') {
   el.className = `toast ${tone === 'ok' || tone === 'error' ? tone : ''}`.trim();
 
   clearTimeout(toastTimer);
-  // Даём браузеру кадр, чтобы уведомление выехало плавно даже при первом показе
-  requestAnimationFrame(() => el.classList.add('show'));
-  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+  cancelAnimationFrame(toastFrame);
+  // Даём браузеру кадр, чтобы уведомление выехало плавно даже при первом показе.
+  // Время показа отсчитываем от самого появления: если вкладка была свёрнута, человек
+  // увидит уведомление, когда вернётся, и оно не останется висеть на экране навсегда.
+  toastFrame = requestAnimationFrame(() => {
+    el.classList.add('show');
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+  });
 }
 
 /* ---------- Окна поверх страницы ---------- */
@@ -89,7 +87,13 @@ export function bindModalDismiss() {
       openModal(openBtn.getAttribute('data-open-modal'));
       return;
     }
-    if (e.target === pressedOnBackdrop && e.target.classList.contains('open')) {
+    // Окно с пометкой data-sticky закрывается только своей кнопкой: в нём показывают
+    // то, что нельзя увидеть повторно, и случайный щелчок мимо не должен это стирать
+    if (
+      e.target === pressedOnBackdrop &&
+      e.target.classList.contains('open') &&
+      !e.target.hasAttribute('data-sticky')
+    ) {
       closeModal(e.target.id);
     }
   });
@@ -99,7 +103,7 @@ export function bindModalDismiss() {
     if (!opened) return;
 
     if (e.key === 'Escape') {
-      closeModal(opened.id);
+      if (!opened.hasAttribute('data-sticky')) closeModal(opened.id);
       return;
     }
     if (e.key === 'Tab') {

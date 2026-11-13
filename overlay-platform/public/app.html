@@ -34,6 +34,11 @@
     </div>
     <div class="topnav-right">
       <span class="status-badge muted" id="shell-ws-status"><span class="dot"></span>связь…</span>
+      <span class="user-chip hide-compact" id="user-chip" hidden>
+        <span class="avatar" id="user-chip-letter" aria-hidden="true"></span>
+        <span class="name" id="user-chip-name"></span>
+      </span>
+      <button class="btn-action hide-compact" type="button" data-logout>Выйти</button>
       <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav">Меню</button>
     </div>
   </nav>
@@ -44,20 +49,26 @@
     </button>
     <a href="/">Главная</a>
     <a class="active" href="/app">Рабочая среда</a>
+    <button class="btn-ghost" type="button" data-logout>Выйти из аккаунта</button>
   </nav>
 
   <div class="workspace-layout">
     <!-- Боковая панель кабинета -->
     <aside class="glass workspace-sidebar">
       <div>
-        <div class="card-label">рабочая среда</div>
-        <div class="sidebar-title">Кабинет</div>
+        <div class="card-label">кабинет</div>
+        <div class="sidebar-title" id="me-name">Кабинет</div>
+        <div class="sidebar-sub" id="me-login"></div>
       </div>
 
       <div class="sidebar-nav" role="tablist" aria-label="Разделы">
-        <button class="sidebar-link active" type="button" role="tab" id="tab-plan" aria-selected="true" aria-controls="pane-plan">
+        <button class="sidebar-link active" type="button" role="tab" id="tab-account" aria-selected="true" aria-controls="pane-account">
+          <span>Аккаунт</span>
+          <span class="mono">вход</span>
+        </button>
+        <button class="sidebar-link" type="button" role="tab" id="tab-plan" aria-selected="false" aria-controls="pane-plan" tabindex="-1">
           <span>План работ</span>
-          <span class="mono">2 / 9</span>
+          <span class="mono">3 / 9</span>
         </button>
         <button class="sidebar-link" type="button" role="tab" id="tab-editor" aria-selected="false" aria-controls="pane-editor" tabindex="-1">
           <span>Каркас редактора</span>
@@ -66,8 +77,7 @@
       </div>
 
       <div class="notice-box">
-        Вход в аккаунт появится здесь на <strong>этапе 3</strong>, площадки и приглашение
-        модераторов — на <strong>этапе 4</strong>.
+        Площадки и приглашение модераторов появятся здесь на <strong>этапе 4</strong>.
       </div>
 
       <button class="btn-action" type="button" data-atmo-toggle aria-pressed="false">
@@ -76,14 +86,126 @@
     </aside>
 
     <div class="workspace-main">
-      <!-- Раздел 1: план работ с честными статусами -->
-      <section id="pane-plan" role="tabpanel" aria-labelledby="tab-plan" class="stack" style="gap: 20px;">
+      <!-- Раздел 1: аккаунт -->
+      <section id="pane-account" role="tabpanel" aria-labelledby="tab-account" class="stack" style="gap: 20px;">
         <div class="glass pad-card">
-          <div class="sec-eyebrow" style="margin-bottom: 12px;">этап 2 из 9 завершён</div>
+          <div class="sec-eyebrow" style="margin-bottom: 12px;">аккаунт</div>
+          <h1 class="pane-title" id="hello-title">Здравствуйте</h1>
+          <p class="sec-sub" style="margin-top: 10px; max-width: 680px;" id="hello-text">Загружаю данные аккаунта…</p>
+        </div>
+
+        <div class="settings-grid">
+          <form class="glass pad-card-sm" id="profile-form" method="post" novalidate>
+            <div class="card-label">профиль</div>
+            <h2 class="settings-title">Отображаемое имя</h2>
+            <p class="settings-text">
+              Так вас видят другие участники площадок. Имя для входа
+              (<span class="mono" id="profile-login">…</span>) не меняется.
+            </p>
+            <div class="field">
+              <label class="field-label" for="profile-display">Отображаемое имя</label>
+              <input class="kf-input studio" id="profile-display" name="displayName" type="text" autocomplete="nickname" maxlength="40" required>
+              <div class="field-error" id="profile-display-error" hidden></div>
+            </div>
+            <div class="warn-box" id="profile-error" role="alert" hidden></div>
+            <div class="form-actions">
+              <button class="btn-primary sm" type="submit" id="profile-submit">Сохранить</button>
+            </div>
+          </form>
+
+          <form class="glass pad-card-sm" id="password-form" method="post" novalidate>
+            <div class="card-label">безопасность</div>
+            <h2 class="settings-title">Пароль</h2>
+            <p class="settings-text">
+              После смены пароля входы на других устройствах закроются. На этом устройстве
+              вы останетесь в кабинете.
+            </p>
+            <!-- Скрытое поле с именем: по нему менеджер паролей понимает, чей пароль обновить -->
+            <input id="password-username" name="username" type="text" autocomplete="username" hidden>
+            <div class="field">
+              <label class="field-label" for="password-current">Текущий пароль</label>
+              <div class="password-wrap">
+                <input class="kf-input studio" id="password-current" name="currentPassword" type="password" autocomplete="current-password" maxlength="200" required>
+                <button class="password-toggle" type="button" data-toggle-password="password-current" aria-pressed="false">показать</button>
+              </div>
+              <div class="field-error" id="password-current-error" hidden></div>
+            </div>
+            <div class="field">
+              <label class="field-label" for="password-new">Новый пароль</label>
+              <div class="password-wrap">
+                <input class="kf-input studio" id="password-new" name="newPassword" type="password" autocomplete="new-password" maxlength="200" required>
+                <button class="password-toggle" type="button" data-toggle-password="password-new" aria-pressed="false">показать</button>
+              </div>
+              <div class="field-error" id="password-new-error" hidden></div>
+              <div class="field-hint">Не меньше 8 символов.</div>
+            </div>
+            <div class="warn-box" id="password-error" role="alert" hidden></div>
+            <div class="form-actions">
+              <button class="btn-primary sm" type="submit" id="password-submit">Сменить пароль</button>
+            </div>
+          </form>
+
+          <form class="glass pad-card-sm" id="recovery-form" method="post" novalidate>
+            <div class="card-label">безопасность</div>
+            <h2 class="settings-title">Код восстановления</h2>
+            <p class="settings-text">
+              Единственный способ вернуть доступ, если забудете пароль. Потеряли прежний код —
+              создайте новый: старый перестанет действовать.
+            </p>
+            <div class="field">
+              <label class="field-label" for="recovery-current">Текущий пароль</label>
+              <div class="password-wrap">
+                <input class="kf-input studio" id="recovery-current" name="currentPassword" type="password" autocomplete="current-password" maxlength="200" required>
+                <button class="password-toggle" type="button" data-toggle-password="recovery-current" aria-pressed="false">показать</button>
+              </div>
+              <div class="field-error" id="recovery-current-error" hidden></div>
+            </div>
+            <div class="warn-box" id="recovery-error" role="alert" hidden></div>
+            <div class="form-actions">
+              <button class="btn-ghost sm" type="submit" id="recovery-submit">Создать новый код</button>
+            </div>
+          </form>
+
+          <div class="glass pad-card-sm">
+            <div class="card-label">безопасность</div>
+            <h2 class="settings-title">Входы на устройствах</h2>
+            <p class="settings-text">
+              Вход на устройстве сохраняется на 30 дней. Если входили с чужого компьютера —
+              закройте все входы разом.
+            </p>
+            <div class="kv-row divided">
+              <span>Активных входов</span>
+              <strong id="sessions-count">—</strong>
+            </div>
+            <div class="form-actions">
+              <button class="btn-ghost sm danger" type="button" data-open-modal="modal-logout-all">Выйти на всех устройствах</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="glass pad-card-sm">
+          <div class="row between">
+            <div>
+              <div class="card-label">площадки</div>
+              <h2 class="settings-title">Мои площадки</h2>
+            </div>
+            <span class="status-badge amber">появятся на этапе 4</span>
+          </div>
+          <div class="empty-box" style="margin-top: 16px; padding: 30px 18px;">
+            <div class="big" style="font-size: 32px;">00</div>
+            <p style="font-size: 15px;">Здесь будут площадки, которыми вы владеете и которые модерируете</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Раздел 2: план работ с честными статусами -->
+      <section id="pane-plan" role="tabpanel" aria-labelledby="tab-plan" class="stack" style="gap: 20px;" hidden>
+        <div class="glass pad-card">
+          <div class="sec-eyebrow" style="margin-bottom: 12px;">этап 3 из 9 завершён</div>
           <h1 class="pane-title">План работ</h1>
           <p class="sec-sub" style="margin-top: 10px; max-width: 680px;">
-            Готовы фундамент и общий внешний вид: сервер, база данных, живой канал связи,
-            шрифты, зерно и элементы интерфейса. Ниже — что уже сделано и что на очереди.
+            Готовы основа, внешний вид и вход: сервер, база данных, живой канал связи,
+            аккаунты и защита личных страниц. Ниже — что уже сделано и что на очереди.
           </p>
         </div>
 
@@ -106,22 +228,22 @@
             <p class="stage-card-text">Сервер, база, живой канал связи, шрифты, зерно и общие элементы интерфейса.</p>
           </div>
 
-          <div class="glass pad-card-sm" style="border-color: rgba(163, 19, 19, 0.45);">
-            <div class="row between">
-              <span class="card-label mono" style="color: var(--crimson-light);">этап 03</span>
-              <span class="status-badge crimson"><span class="dot"></span>следующий</span>
-            </div>
-            <div class="stage-card-title">Вход и регистрация</div>
-            <p class="stage-card-text">Аккаунты, вход, выход и защита личных страниц.</p>
-          </div>
-
           <div class="glass pad-card-sm">
             <div class="row between">
-              <span class="card-label mono">этап 04</span>
-              <span class="status-badge muted">в очереди</span>
+              <span class="card-label mono">этап 03</span>
+              <span class="status-badge ok"><span class="dot"></span>готово</span>
+            </div>
+            <div class="stage-card-title">Вход и регистрация</div>
+            <p class="stage-card-text">Аккаунты, вход, выход, восстановление доступа и защита личных страниц.</p>
+          </div>
+
+          <div class="glass pad-card-sm" style="border-color: rgba(163, 19, 19, 0.45);">
+            <div class="row between">
+              <span class="card-label mono" style="color: var(--crimson-light);">этап 04</span>
+              <span class="status-badge crimson"><span class="dot"></span>следующий</span>
             </div>
             <div class="stage-card-title">Площадки и роли</div>
-            <p class="stage-card-text">Создание площадки, кабинет, приглашение и отзыв модераторов.</p>
+            <p class="stage-card-text">Создание площадки, приглашение и отзыв модераторов, проверка прав.</p>
           </div>
 
           <div class="glass pad-card-sm">
@@ -171,7 +293,7 @@
         </div>
       </section>
 
-      <!-- Раздел 2: раскладка будущего редактора -->
+      <!-- Раздел 3: раскладка будущего редактора -->
       <section id="pane-editor" role="tabpanel" aria-labelledby="tab-editor" hidden>
         <div class="glass pad-card-sm row between" style="margin-bottom: 16px;">
           <div>
@@ -212,6 +334,55 @@
           </div>
         </div>
       </section>
+    </div>
+  </div>
+
+  <!-- Окно: новый код восстановления (показывается один раз) -->
+  <div class="modal" id="modal-recovery-code" role="dialog" aria-modal="true" aria-labelledby="modal-code-title" data-sticky>
+    <div class="modal-box">
+      <div class="modal-head">
+        <div>
+          <div class="modal-eyebrow">показывается один раз</div>
+          <h3 class="modal-title" id="modal-code-title">Новый код восстановления</h3>
+        </div>
+      </div>
+      <p class="settings-text">
+        Прежний код больше не действует. Запишите новый или сохраните его в менеджере паролей:
+        после закрытия окна увидеть его снова нельзя.
+      </p>
+      <div class="code-box">
+        <output class="code-value" id="new-code-value" aria-label="Код восстановления"></output>
+        <button class="btn-action" type="button" id="new-code-copy" data-autofocus>Скопировать код</button>
+      </div>
+      <label class="kf-check" style="margin-top: 18px;">
+        <input type="checkbox" id="new-code-saved">
+        <span>Код сохранён в надёжном месте</span>
+      </label>
+      <div class="modal-foot">
+        <button class="btn-primary sm" type="button" id="new-code-done" disabled>Готово</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Окно: подтверждение выхода на всех устройствах -->
+  <div class="modal" id="modal-logout-all" role="dialog" aria-modal="true" aria-labelledby="modal-logout-title">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div>
+          <div class="modal-eyebrow">безопасность</div>
+          <h3 class="modal-title" id="modal-logout-title">Выйти на всех устройствах?</h3>
+        </div>
+        <button class="icon-btn" type="button" data-close-modal="modal-logout-all" aria-label="Закрыть">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <p class="settings-text" style="margin: 0;">
+        Закроются все входы, включая этот. Чтобы продолжить работу, нужно будет войти заново.
+      </p>
+      <div class="modal-foot">
+        <button class="btn-ghost sm" type="button" data-close-modal="modal-logout-all" data-autofocus>Отмена</button>
+        <button class="btn-primary sm" type="button" id="logout-all-confirm">Выйти везде</button>
+      </div>
     </div>
   </div>
 </body>

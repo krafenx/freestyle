@@ -33,6 +33,12 @@
       <a class="active" href="/" aria-current="page">Главная</a>
       <a href="/app">Рабочая среда</a>
     </div>
+    <!-- Гостю — «Войти», вошедшему — его имя со ссылкой в кабинет (переключает home.js) -->
+    <a class="btn-action hide-compact" id="nav-login" href="/login">Войти</a>
+    <a class="user-chip hide-compact" id="nav-user" href="/app" aria-label="Открыть кабинет" hidden>
+      <span class="avatar" id="nav-user-letter" aria-hidden="true"></span>
+      <span class="name" id="nav-user-name"></span>
+    </a>
     <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav">Меню</button>
   </nav>
 
@@ -45,6 +51,7 @@
     <a href="#sources">Источники сцены</a>
     <a href="#ui">Элементы интерфейса</a>
     <a href="/app">Рабочая среда</a>
+    <a href="/login" id="mobile-login">Войти</a>
   </nav>
 
   <!-- Боковой указатель секций -->
@@ -64,7 +71,7 @@
       <div>
         <div class="hero-status-row">
           <span class="status-badge muted" id="hero-health-badge"><span class="dot"></span>проверяю сервер…</span>
-          <span class="status-badge crimson">этап 2 из 9 · основа</span>
+          <span class="status-badge crimson">этап 3 из 9 · вход</span>
         </div>
         <div class="hero-eyebrow">browser source · live sync · moderators</div>
         <h1 class="hero-display">kra<span class="grad">fen</span> studio</h1>
@@ -90,7 +97,8 @@
         <h2 class="sec-heading">Что уже работает</h2>
         <p class="sec-sub">
           Три показателя ниже приходят с настоящего сервера прямо сейчас — это не картинка
-          и не заготовка. На этом фундаменте дальше строятся вход, площадки, редактор и сам оверлей.
+          и не заготовка. На этом фундаменте уже работает вход в аккаунт; дальше — площадки,
+          редактор и сам оверлей.
         </p>
       </div>
 
@@ -101,7 +109,7 @@
             <span class="status-badge muted" id="db-badge"><span class="dot"></span>проверка</span>
           </div>
           <div class="stat-value" id="db-state-val">—</div>
-          <p class="stat-note">Здесь будут храниться аккаунты, площадки и сцены.</p>
+          <p class="stat-note">Здесь хранятся аккаунты. Позже добавятся площадки и сцены.</p>
           <div class="kv-row divided">
             <span>Защита от потери данных при сбое</span>
             <strong id="db-safe-val">—</strong>

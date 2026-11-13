@@ -8,9 +8,10 @@ import { createOverlayServer } from '../src/server/app.js';
 
 /* Этап 2: проверяем, что основа платформы действительно работает,
    а не просто «лежит в папке»: сервер, база, живой канал связи,
-   страницы, стили, скрипты и шрифты. */
+   страницы, стили, скрипты и шрифты. Вход и аккаунты — в auth.test.js. */
 
-const PAGES = { '/': 'index.html', '/app': 'app.html' };
+// Обновления структуры базы, которые должны быть применены к этому моменту
+const SCHEMA_VERSION = 2;
 
 function makeServer(tmpDir) {
   return createOverlayServer({
@@ -113,7 +114,7 @@ describe('Этап 2 — основа платформы', () => {
     assert.equal(body.db.engine, 'sqlite');
     assert.equal(body.db.journalMode, 'wal');
     assert.equal(body.db.foreignKeys, true);
-    assert.equal(body.db.schemaVersion, 1);
+    assert.equal(body.db.schemaVersion, SCHEMA_VERSION);
     assert.equal(typeof body.realtime.connectedClients, 'number');
   });
 
@@ -140,18 +141,25 @@ describe('Этап 2 — основа платформы', () => {
 
   /* ---------- Страницы ---------- */
 
-  it('главная страница и рабочая среда открываются и содержат все слои атмосферы', async () => {
-    for (const route of Object.keys(PAGES)) {
-      const res = await fetch(`${baseUrl}${route}`);
+  it('главная и страницы входа открываются гостю, каждая страница содержит все слои атмосферы', async () => {
+    for (const route of ['/', '/login', '/register', '/recover']) {
+      const res = await fetch(`${baseUrl}${route}`, { redirect: 'manual' });
       assert.equal(res.status, 200, `страница ${route} должна открываться`);
       assert.match(res.headers.get('content-type') || '', /text\/html/);
-      const html = await res.text();
-      assert.match(html, /<div class="grain"/, `на странице ${route} нет слоя зернистости`);
-      assert.match(html, /id="glow"/, `на странице ${route} нет фонового свечения`);
-      assert.match(html, /<canvas id="rain"/, `на странице ${route} нет слоя дождя`);
-      assert.match(html, /class="vignette"/, `на странице ${route} нет виньетки`);
-      assert.match(html, /kra<em>fen<\/em>/, `на странице ${route} нет фирменного знака`);
-      assert.match(html, /<html lang="ru">/, `страница ${route} должна быть помечена как русскоязычная`);
+      await res.arrayBuffer();
+    }
+
+    const pages = listPublicFiles(publicDir, /\.html$/);
+    assert.ok(pages.length >= 6, 'ожидались главная, кабинет, вход, регистрация, восстановление и «не найдено»');
+    for (const file of pages) {
+      const html = fs.readFileSync(file, 'utf8');
+      const name = path.relative(publicDir, file);
+      assert.match(html, /<div class="grain"/, `${name}: нет слоя зернистости`);
+      assert.match(html, /id="glow"/, `${name}: нет фонового свечения`);
+      assert.match(html, /<canvas id="rain"/, `${name}: нет слоя дождя`);
+      assert.match(html, /class="vignette"/, `${name}: нет виньетки`);
+      assert.match(html, /kra<em>fen<\/em>/, `${name}: нет фирменного знака`);
+      assert.match(html, /<html lang="ru">/, `${name}: страница должна быть помечена как русскоязычная`);
     }
   });
 
@@ -230,21 +238,23 @@ describe('Этап 2 — основа платформы', () => {
   });
 
   it('каждая кнопка и поле, к которым обращаются скрипты страниц, есть в разметке', () => {
-    const pairs = [
-      ['js/pages/home.js', 'index.html'],
-      ['js/pages/shell.js', 'app.html'],
-    ];
-    for (const [script, page] of pairs) {
+    // Пары «страница — её скрипт» берутся из самих страниц, поэтому новые страницы проверяются сами
+    let checkedPages = 0;
+    for (const file of listPublicFiles(publicDir, /\.html$/)) {
+      const html = fs.readFileSync(file, 'utf8');
+      const page = path.relative(publicDir, file);
+      const script = html.match(/<script type="module" src="\/(js\/pages\/[\w-]+\.js)"><\/script>/)?.[1];
+      assert.ok(script, `${page}: не подключён скрипт страницы`);
       const code = fs.readFileSync(path.join(publicDir, script), 'utf8');
-      const html = fs.readFileSync(path.join(publicDir, page), 'utf8');
       const ids = new Set(
         [...code.matchAll(/(?:\$|getElementById)\('([\w-]+)'\)/g)].map((m) => m[1])
       );
-      assert.ok(ids.size > 0, `${script}: не найдено обращений к элементам страницы`);
       for (const id of ids) {
         assert.ok(html.includes(`id="${id}"`), `${page}: нет элемента #${id}, который нужен ${script}`);
       }
+      if (ids.size > 0) checkedPages += 1;
     }
+    assert.ok(checkedPages >= 5, 'скрипты страниц должны обращаться к элементам по id');
     // Вкладки и окна ссылаются друг на друга по id — эти связи тоже должны сходиться
     for (const file of listPublicFiles(publicDir, /\.html$/)) {
       const html = fs.readFileSync(file, 'utf8');
@@ -366,6 +376,8 @@ describe('Этап 2 — основа платформы', () => {
     assert.match(code, /let seed = 0x5f3759df/);
     assert.match(code, /seed = \(seed \* 1664525 \+ 1013904223\) >>> 0/);
     assert.match(code, /const v = \(seed >>> 24\) & 255/);
+    // Плитка рисуется в обычной памяти: открытие страницы не должно ждать видеокарту
+    assert.match(code, /canvas\.getContext\('2d', \{ willReadFrequently: true \}\)/);
 
     const css = fs.readFileSync(path.join(publicDir, 'styles/atmosphere.css'), 'utf8');
     const grainRule = css.match(/\.grain\s*\{([^}]+)\}/);
@@ -473,7 +485,7 @@ describe('Этап 2 — сохранность данных', () => {
       await second.stop();
 
       assert.equal(probe?.value, 'сохранено');
-      assert.equal(migrations.n, 1);
+      assert.equal(migrations.n, SCHEMA_VERSION);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

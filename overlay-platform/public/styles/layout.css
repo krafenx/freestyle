@@ -696,6 +696,19 @@ main {
   color: #fff;
 }
 
+.sidebar-sub {
+  margin-top: 3px;
+  min-height: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--label);
+  overflow-wrap: anywhere;
+}
+
+.sidebar-title {
+  overflow-wrap: anywhere;
+}
+
 .sidebar-nav {
   display: flex;
   flex-direction: column;
@@ -774,6 +787,91 @@ main {
   font-weight: 300;
   color: var(--silver);
   line-height: 1.6;
+}
+
+/* Кто вошёл — в шапке кабинета */
+.user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 220px;
+  padding: 4px 13px 4px 5px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.03);
+  font-size: 12px;
+  color: var(--silver-bright);
+  text-decoration: none;
+  transition:
+    color 0.25s var(--ease),
+    border-color 0.25s var(--ease);
+}
+
+a.user-chip:hover {
+  color: #fff;
+  border-color: rgba(163, 19, 19, 0.55);
+}
+
+.user-chip .avatar {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #8e0f0f, #5c0505);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.user-chip .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Настройки аккаунта: карточки-формы в две колонки, в одном ряду — одной высоты */
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.settings-title {
+  margin-top: 6px;
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 1.25;
+  color: #fff;
+}
+
+.settings-text {
+  margin: 6px 0 16px;
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 1.65;
+  color: var(--silver);
+}
+
+.settings-text .mono {
+  color: var(--silver-bright);
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.mobile-nav .btn-ghost {
+  margin-top: 10px;
 }
 
 /* Три колонки будущего редактора: слои · сцена · свойства */
@@ -868,6 +966,97 @@ footer.site-footer .foot-brand {
   margin-bottom: 16px;
 }
 
+/* ---------- Вход, регистрация, восстановление ---------- */
+.auth-page {
+  position: relative;
+  z-index: var(--z-content);
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 118px 20px 72px;
+}
+
+.auth-card {
+  width: min(448px, 100%);
+  padding: 34px 32px 30px;
+}
+
+.auth-title {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: clamp(30px, 6vw, 38px);
+  line-height: 1.12;
+  color: #fff;
+  outline: none;
+}
+
+.auth-lead {
+  margin-top: 12px;
+  font-size: 13px;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--silver);
+}
+
+.auth-lead strong {
+  font-weight: 500;
+  color: var(--silver-bright);
+}
+
+.auth-form {
+  margin-top: 26px;
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 6px;
+}
+
+.auth-alert {
+  margin-bottom: 16px;
+}
+
+.auth-card .auth-alert:not([hidden]) + .auth-form,
+.auth-card .code-box,
+.auth-card .kf-check,
+.auth-card .auth-hint {
+  margin-top: 20px;
+}
+
+.auth-card .kf-check + .auth-submit {
+  margin-top: 20px;
+}
+
+.auth-links {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line-subtle);
+  font-size: 12px;
+  color: var(--silver);
+}
+
+.auth-links a {
+  color: var(--silver-bright);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(160, 160, 160, 0.3);
+  padding-bottom: 1px;
+  transition:
+    color 0.25s var(--ease),
+    border-color 0.25s var(--ease);
+}
+
+.auth-links a:hover {
+  color: #fff;
+  border-color: var(--crimson-light);
+}
+
 /* ---------- Страница «не найдено» ---------- */
 .lost-page {
   position: relative;
@@ -940,6 +1129,13 @@ footer.site-footer .foot-brand {
   .grid-3 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  /* В узкой шапке остаются знак, связь и «Меню»: выход переезжает в меню, а имя видно в карточке кабинета */
+  .hide-compact {
+    display: none;
+  }
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
   .workspace-layout {
     grid-template-columns: 1fr;
     padding: 84px 20px 104px;
@@ -988,6 +1184,13 @@ footer.site-footer .foot-brand {
   }
   .brand-tag {
     display: none;
+  }
+  .auth-page {
+    align-items: flex-start;
+    padding: 96px 14px 56px;
+  }
+  .auth-card {
+    padding: 26px 20px 24px;
   }
   .workspace-layout {
     padding: 78px 14px 100px;

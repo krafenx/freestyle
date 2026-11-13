@@ -34,22 +34,48 @@
   z-index: auto;
 }
 
-/* ---------- Шапка редактора ---------- */
+/* ---------- Шапка редактора ----------
+   Сетка, а не «перенос, когда не помещается»: что в какой строке стоит, зависит только
+   от ширины окна и не зависит от длины надписей. Вместе с постоянной шириной значков
+   состояния это значит, что шапка не перестраивается на ходу — и сцена под ней не прыгает
+   под курсором, когда «сохранено» сменяется на «сохраняю…» или начинается загрузка файла.
+
+   Широкий экран — одна строка. Средний — две: ссылка, подпись и значки; название и кнопки.
+   Телефон — столбиком, название во всю ширину. */
 .editor-bar {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "back label side actions"
+    "back name side actions";
   align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 18px;
+  gap: 2px 18px;
   padding: 12px 18px;
 }
 
+/* Подпись и название — отдельные ячейки сетки: в узкой шапке они стоят в разных строках */
 .editor-heading {
-  flex: 1 1 180px;
+  display: contents;
+}
+
+.editor-bar > .back-link {
+  grid-area: back;
+  align-self: start;
+}
+
+.editor-heading .card-label {
+  grid-area: label;
+  align-self: end;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .editor-name {
-  margin-top: 2px;
+  grid-area: name;
+  align-self: start;
+  min-width: 0;
   font-family: var(--font-heading);
   font-weight: 400;
   font-size: 20px;
@@ -62,12 +88,51 @@
 .editor-bar-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
   gap: 8px;
 }
 
+.editor-bar-side {
+  grid-area: side;
+  /* Значок «сохранено» стоит у правого края; свободное место — слева от роли, где его не видно */
+  flex-direction: row-reverse;
+}
+
 .editor-bar-actions {
+  grid-area: actions;
   gap: 10px;
+}
+
+/* Значки состояния занимают в шапке постоянное место.
+   Надпись внутри значка: под видимым текстом лежит невидимая мерка — самая длинная
+   из возможных надписей (её называет страница, data-widest). */
+.badge-text {
+  display: inline-block;
+}
+
+.badge-text::after {
+  content: attr(data-widest);
+  display: block;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+}
+
+/* Место, где показывается роль, а на время загрузки файлов — её ход. Ширину держит
+   невидимая мерка: самый широкий значок, который может здесь оказаться */
+.editor-bar-slot {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.editor-bar-slot .slot-sizer {
+  height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top-width: 0;
+  border-bottom-width: 0;
+  overflow: hidden;
+  visibility: hidden;
 }
 
 /* ---------- Сетка: слои · сцена · свойства ---------- */
@@ -138,9 +203,11 @@
   min-width: 0;
 }
 
+/* Фон непрозрачный: на среднем экране и телефоне панели прокручиваются под сценой,
+   и сквозь полупрозрачную карточку проступал бы их текст */
 .stage-card {
   padding: 12px;
-  background: rgba(10, 10, 13, 0.97);
+  background: rgb(10, 10, 13);
 }
 
 .stage {
@@ -1061,6 +1128,21 @@
     position: sticky;
     top: var(--editor-nav);
   }
+
+  /* Тень отделяет сцену от того, что прокручивается под ней */
+  .stage-card {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.035),
+      0 16px 26px -14px rgba(0, 0, 0, 0.9);
+  }
+
+  /* Под сценой почти не осталось места — например, открыта экранная клавиатура. Тогда сцена
+     прокручивается вместе со страницей: важнее видеть поле, в котором печатаешь.
+     Класс ставит страница (pages/editor.js) */
+  html.stage-loose .stage-col {
+    position: relative;
+    top: auto;
+  }
 }
 
 @media (max-width: 980px) {
@@ -1070,6 +1152,28 @@
 
   .editor-layout {
     padding: 80px 16px 28px;
+  }
+}
+
+/* Шапка в две строки: ссылка, подпись и значки состояния; под ними название и кнопки */
+@media (max-width: 939px) {
+  .editor-bar {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "back label side"
+      "name name actions";
+    row-gap: 10px;
+  }
+
+  .editor-bar > .back-link,
+  .editor-heading .card-label,
+  .editor-name {
+    align-self: center;
+  }
+
+  .editor-bar-side,
+  .editor-bar-actions {
+    justify-self: end;
   }
 }
 
@@ -1117,12 +1221,33 @@
     gap: 12px;
   }
 
+  /* Шапка столбиком: ссылка с подписью, название во всю ширину, значки состояния, кнопки */
   .editor-bar {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "back label"
+      "name name"
+      "side side"
+      "actions actions";
     padding: 12px 14px;
   }
 
+  .editor-name {
+    margin-top: -4px;
+  }
+
+  /* Значки стоят у левого края: сначала «сохранено», за ним роль */
+  .editor-bar-side {
+    justify-self: start;
+    flex-direction: row;
+  }
+
+  .editor-bar-slot {
+    align-items: flex-start;
+  }
+
   .editor-bar-actions {
-    flex: 1 1 100%;
+    justify-self: stretch;
   }
 
   .editor-bar-actions > * {
@@ -1141,6 +1266,15 @@
 
   .kf-area.code {
     min-height: 200px;
+  }
+}
+
+/* Самые узкие телефоны: поля у кнопок шапки чуть меньше — иначе две кнопки не помещаются в строку */
+@media (max-width: 360px) {
+  .editor-bar-actions > .btn-action,
+  .editor-bar-actions > .btn-primary {
+    padding-left: 14px;
+    padding-right: 14px;
   }
 }
 

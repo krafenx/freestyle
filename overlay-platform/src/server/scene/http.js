@@ -42,6 +42,12 @@ export function createSceneHttp({ scene, auth }) {
       return res.status(415).json({ ok: false, error: 'file_required' });
     },
     handle(async (req, res) => {
+      /* Пока файл идёт, соединение не должно молчать. Если за заданное время не пришло
+         ни байта, связь считается потерянной: сервер сам закрывает соединение, недокачанный
+         файл удаляется, место для загрузки освобождается. Иначе «зависшая» загрузка
+         (у человека пропал интернет) занимала бы это место, пока не истечёт общий срок запроса. */
+      const { socket } = req;
+      socket.setTimeout(scene.uploadIdleMs);
       try {
         const result = await scene.upload({
           ...from(req),
@@ -53,6 +59,9 @@ export function createSceneHttp({ scene, auth }) {
       } catch (err) {
         if (!req.complete) res.setHeader('Connection', 'close');
         throw err;
+      } finally {
+        // Соединение может служить и следующим запросам — им этот срок не нужен
+        if (!socket.destroyed) socket.setTimeout(0);
       }
     })
   );

@@ -71,7 +71,7 @@
       <div>
         <div class="hero-status-row">
           <span class="status-badge muted" id="hero-health-badge"><span class="dot"></span>проверяю сервер…</span>
-          <span class="status-badge crimson">этап 4 из 9 · площадки</span>
+          <span class="status-badge crimson">этап 5 из 9 · редактор</span>
         </div>
         <div class="hero-eyebrow">browser source · live sync · moderators</div>
         <h1 class="hero-display">kra<span class="grad">fen</span> studio</h1>
@@ -97,8 +97,8 @@
         <h2 class="sec-heading">Что уже работает</h2>
         <p class="sec-sub">
           Три показателя ниже приходят с настоящего сервера прямо сейчас — это не картинка
-          и не заготовка. На этом фундаменте уже работают вход в аккаунт и площадки с командой
-          модераторов; дальше — редактор и сам оверлей.
+          и не заготовка. На этом фундаменте уже работают вход в аккаунт, площадки с командой
+          модераторов и редактор сцены; дальше — сам оверлей для OBS.
         </p>
       </div>
 
@@ -109,7 +109,7 @@
             <span class="status-badge muted" id="db-badge"><span class="dot"></span>проверка</span>
           </div>
           <div class="stat-value" id="db-state-val">—</div>
-          <p class="stat-note">Здесь хранятся аккаунты, площадки и их команды. Позже добавятся сцены.</p>
+          <p class="stat-note">Здесь хранятся аккаунты, площадки, их команды и сцены.</p>
           <div class="kv-row divided">
             <span>Защита от потери данных при сбое</span>
             <strong id="db-safe-val">—</strong>
@@ -122,7 +122,7 @@
             <span class="status-badge muted" id="ws-badge"><span class="dot"></span>подключение</span>
           </div>
           <div class="stat-value mono" id="ws-rtt-val">— мс</div>
-          <p class="stat-note">По этому каналу правки из редактора будут мгновенно попадать в OBS.</p>
+          <p class="stat-note">По этому каналу открытые редакторы узнают о правках друг друга. Позже так же их получит OBS.</p>
           <div class="row between divided">
             <span class="kv-inline">Открыто окон: <strong id="ws-clients-val">0</strong></span>
             <button class="btn-action" type="button" id="ws-ping-btn" aria-label="Замерить задержку заново">Замерить</button>
@@ -155,7 +155,7 @@
           настройки, а не один универсальный блок на все случаи.
         </p>
         <p style="margin-top: 16px;">
-          <span class="status-badge amber">в плане · редактор собирается на этапе 5</span>
+          <span class="status-badge ok"><span class="dot"></span>работает · в редакторе сцены</span>
         </p>
       </div>
 
@@ -253,7 +253,7 @@
             <span class="status-badge muted">widget</span>
           </div>
           <h3 class="source-title">Виджеты</h3>
-          <p class="source-desc">Шкала цели, бегущая строка, карточка эфира и собственный блок на HTML.</p>
+          <p class="source-desc">Шкала цели, бегущая строка, карточка эфира и собственный блок на HTML и CSS.</p>
           <div class="source-props">
             <span class="prop-chip">цель</span>
             <span class="prop-chip">бегущая строка</span>
@@ -270,7 +270,7 @@
         <div class="sec-eyebrow">03 / общий язык всех экранов</div>
         <h2 class="sec-heading">Элементы интерфейса</h2>
         <p class="sec-sub">
-          Шрифты, карточки и элементы управления, из которых будут собраны кабинет и редактор.
+          Шрифты, карточки и элементы управления, из которых собраны кабинет и редактор.
           Всё рабочее: поля можно править, ползунок двигать, окно и уведомление открывать.
         </p>
       </div>
@@ -353,8 +353,8 @@
 
       <div class="glass pad-card reveal" style="margin-top: 20px;">
         <div class="row between">
-          <span class="card-label">Проба: так будут устроены настройки текста</span>
-          <span class="status-badge amber">образец · сам редактор — этап 5</span>
+          <span class="card-label">Проба: так устроены настройки текста</span>
+          <span class="status-badge amber">образец · редактор — в кабинете</span>
         </div>
 
         <div class="grid-2" style="margin-top: 18px;">

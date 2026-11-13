@@ -72,14 +72,14 @@ function el(tag, className, text) {
 
 function workspaceCard(workspace) {
   const isOwner = workspace.role === 'owner';
-  const card = el('a', 'glass lift workspace-card');
-  card.href = `/app/w/${encodeURIComponent(workspace.id)}`;
+  const address = `/app/w/${encodeURIComponent(workspace.id)}`;
+  const card = el('article', 'glass workspace-card');
 
-  const top = el('div', 'row between');
-  top.append(
-    el('span', `status-badge ${isOwner ? 'crimson' : 'muted'}`, isOwner ? 'владелец' : 'модератор'),
-    el('span', 'workspace-card-open', 'открыть')
-  );
+  const top = el('div', 'row');
+  top.append(el('span', `status-badge ${isOwner ? 'crimson' : 'muted'}`, isOwner ? 'владелец' : 'модератор'));
+
+  const name = el('a', 'workspace-card-name', workspace.name);
+  name.href = address;
 
   const team = workspace.moderators > 0
     ? countOf(workspace.moderators, ['модератор', 'модератора', 'модераторов'])
@@ -88,7 +88,17 @@ function workspaceCard(workspace) {
     ? `${team} · создана ${formatDay(workspace.createdAt)}`
     : `владелец: ${workspace.ownerName} · вы в команде с ${formatDay(workspace.joinedAt)}`;
 
-  card.append(top, el('div', 'workspace-card-name', workspace.name), el('div', 'workspace-card-meta', meta));
+  // Два входа: редактор сцены и страница площадки (команда, приглашения, настройки)
+  const actions = el('div', 'workspace-card-actions');
+  const editor = el('a', 'btn-primary sm', 'Редактор сцены');
+  editor.href = `${address}/editor`;
+  editor.setAttribute('aria-label', `Редактор сцены: ${workspace.name}`);
+  const teamPage = el('a', 'btn-action', 'Команда');
+  teamPage.href = address;
+  teamPage.setAttribute('aria-label', `Команда и настройки: ${workspace.name}`);
+  actions.append(editor, teamPage);
+
+  card.append(top, name, el('div', 'workspace-card-meta', meta), actions);
   return card;
 }
 

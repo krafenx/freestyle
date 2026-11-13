@@ -36,15 +36,17 @@ export const initialOf = (name) => [...String(name || '')][0] || '?';
 
 // Размер файла: «512 Б», «340 КБ», «1,2 МБ» — с запятой, как принято в русском тексте
 export function formatBytes(bytes) {
-  const n = Math.max(0, Number(bytes) || 0);
+  const n = Math.max(0, Math.round(Number(bytes) || 0));
   if (n < 1024) return `${n} Б`;
   const units = ['КБ', 'МБ', 'ГБ'];
   let value = n / 1024;
   let unit = 0;
-  while (value >= 1024 && unit < units.length - 1) {
+  // 1023,5 и больше округлилось бы до «1024» — такое число сразу пишется в следующей единице
+  while (value >= 1023.5 && unit < units.length - 1) {
     value /= 1024;
     unit += 1;
   }
-  const text = value >= 100 || Number.isInteger(value) ? String(Math.round(value)) : value.toFixed(1).replace('.', ',');
+  // От сотни — целое число, до сотни — с одним знаком после запятой, но без «,0»
+  const text = value >= 100 ? String(Math.round(value)) : value.toFixed(1).replace(/\.0$/, '').replace('.', ',');
   return `${text} ${units[unit]}`;
 }

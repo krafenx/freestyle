@@ -53,14 +53,41 @@ function show(state) {
   $('add-open').disabled = !ready;
 }
 
+/* ---------- Значки состояния в шапке ----------
+   Роль и ход загрузки файлов делят одно место: пока файлы загружаются, вместо роли
+   показана загрузка. Место и значок «сохранено» — постоянной ширины (см. editor.css). */
+const uploadLabel = (share) => `загрузка ${Math.round(share * 100)}%`;
+const roleBadge = $('ws-role');
+const uploadBadge = $('upload-status');
+const uploadText = el('span', 'badge-text');
+uploadText.dataset.widest = uploadLabel(1);
+uploadBadge.append(el('span', 'dot'), uploadText);
+{
+  // Мерка для общего места: самый широкий значок, который может в нём оказаться
+  const sizer = el('span', 'status-badge slot-sizer');
+  sizer.setAttribute('aria-hidden', 'true');
+  sizer.append(el('span', 'dot'), el('span', '', uploadLabel(1)));
+  $('status-slot').append(sizer);
+}
+let roleKnown = false;
+let uploadsActive = false;
+let sceneGone = false;
+
+function paintSlot() {
+  uploadBadge.hidden = !uploadsActive;
+  roleBadge.hidden = !roleKnown || uploadsActive;
+}
+
 function showGone() {
   stopLive();
   // Открытые окна относились к площадке, которой для этого человека больше нет
   document.querySelectorAll('.modal.open').forEach((modal) => closeModal(modal.id));
   $('ws-name').textContent = 'Сцена недоступна';
-  $('ws-role').hidden = true;
+  sceneGone = true;
+  roleKnown = false;
+  uploadsActive = false;
+  paintSlot();
   $('save-status').hidden = true;
-  $('upload-status').hidden = true;
   document.title = 'Сцена недоступна — krafen studio';
   show('gone');
 }
@@ -74,13 +101,14 @@ const view = createSceneView($('scene'), {
 
 function renderHeader() {
   const { workspace, scene } = store.state;
-  if (!workspace) return;
+  if (!workspace || sceneGone) return;
   const isOwner = workspace.role === 'owner';
   document.title = `Сцена · ${workspace.name} — krafen studio`;
   $('ws-name').textContent = workspace.name; // название — как текст
-  $('ws-role').className = `status-badge ${isOwner ? 'crimson' : 'muted'}`;
-  $('ws-role').textContent = isOwner ? 'владелец' : 'модератор';
-  $('ws-role').hidden = false;
+  roleBadge.className = `status-badge ${isOwner ? 'crimson' : 'muted'}`;
+  roleBadge.textContent = isOwner ? 'владелец' : 'модератор';
+  roleKnown = true;
+  paintSlot();
   $('stage-size').textContent = `${scene.width} × ${scene.height}`;
   $('stage').setAttribute('aria-label', `Сцена ${scene.width} на ${scene.height} точек`);
 }
@@ -104,15 +132,20 @@ const SAVE_STATES = {
   offline: ['crimson', 'не сохранено', 'Нет связи с сервером. Правки остаются на странице и отправятся сами, когда связь вернётся'],
 };
 
+const saveBadge = $('save-status');
+const saveText = el('span', 'badge-text');
+// Значок всегда такой ширины, как самая длинная из надписей
+saveText.dataset.widest = Object.values(SAVE_STATES).map(([, text]) => text).reduce((a, b) => (b.length > a.length ? b : a));
+saveBadge.append(el('span', 'dot'), saveText);
+
 function showSave(state) {
-  const badge = $('save-status');
   const info = SAVE_STATES[state];
-  badge.hidden = !info;
+  saveBadge.hidden = !info;
   if (!info) return;
   const [tone, text, hint] = info;
-  badge.className = `status-badge ${tone}`;
-  badge.replaceChildren(el('span', 'dot'), el('span', '', text));
-  badge.title = hint;
+  saveBadge.className = `status-badge ${tone}`;
+  saveText.textContent = text;
+  saveBadge.title = hint;
 }
 store.on('save', showSave);
 store.on('gone', showGone);
@@ -288,6 +321,40 @@ async function placeFiles(files, point) {
 }
 
 /* ---------- Части редактора ---------- */
+/* Ход загрузки в шапке: доля от всего, что сейчас загружается, по объёму. Считается по всей
+   пачке: загруженный файл остаётся в счёте, пока идут остальные, — иначе после каждого файла
+   проценты начинались бы заново. Подробности по каждому файлу — в окне «Файлы». */
+const uploadBatch = new Map(); // номер загрузки → { size, share }
+
+function showUploads(uploads) {
+  let active = 0;
+  for (const item of uploads) {
+    if (item.status === 'waiting' || item.status === 'uploading') {
+      active += 1;
+      uploadBatch.set(item.id, { size: item.size, share: item.progress });
+    } else if (item.status === 'done' && uploadBatch.has(item.id)) {
+      uploadBatch.get(item.id).share = 1;
+    } else if (item.status === 'error') {
+      uploadBatch.delete(item.id);
+    }
+  }
+  uploadsActive = active > 0 && !sceneGone; // сцена стала недоступна — значки убраны, загрузка их не возвращает
+  paintSlot();
+  if (!uploadsActive) {
+    uploadBatch.clear();
+    return;
+  }
+  let total = 0;
+  let loaded = 0;
+  for (const { size, share } of uploadBatch.values()) {
+    total += size;
+    loaded += size * share;
+  }
+  const text = uploadLabel(total > 0 ? loaded / total : 0);
+  if (uploadText.textContent !== text) uploadText.textContent = text;
+  uploadBadge.title = `Загружается: ${countOf(active, ['файл', 'файла', 'файлов'])}. Подробности — в окне «Файлы»`;
+}
+
 const library = createLibrary({
   store,
   els: {
@@ -315,15 +382,7 @@ const library = createLibrary({
     closeModal('modal-library');
     applyFile(forSource, files[0]);
   },
-  onUploadsChange(uploads) {
-    const active = uploads.filter((item) => item.status === 'waiting' || item.status === 'uploading');
-    const badge = $('upload-status');
-    badge.hidden = active.length === 0;
-    if (!active.length) return;
-    const current = active.find((item) => item.status === 'uploading');
-    const share = current ? ` · ${Math.round(current.progress * 100)}%` : '';
-    badge.replaceChildren(el('span', 'dot'), el('span', '', `загрузка: ${countOf(active.length, ['файл', 'файла', 'файлов'])}${share}`));
-  },
+  onUploadsChange: showUploads,
 });
 
 const panel = createPanel({
@@ -408,6 +467,30 @@ $('add-list').replaceChildren(...SOURCE_LIST.map((module) => {
 
 $('add-open').addEventListener('click', () => openModal('modal-add'));
 $('library-open').addEventListener('click', () => library.open());
+
+/* ---------- Сцена на виду ----------
+   На среднем экране и на телефоне сцена «прилипает» под шапкой сайта, пока под ней
+   прокручивают слои и свойства (editor.css). Страница следит за двумя вещами:
+   — поле, в которое человек перешёл, не должно оказаться под прилипшей сценой: браузеру
+     сообщается, сколько места сверху занято, и он прокручивает страницу с этим запасом;
+   — когда под сценой почти не остаётся места (открыта экранная клавиатура), сцена
+     перестаёт прилипать: важнее видеть поле, в котором печатаешь. */
+const stageCol = document.querySelector('.stage-col');
+const ROOM_UNDER_STAGE = 160; // сколько точек по высоте должно оставаться под прилипшей сценой
+
+function syncStageRoom() {
+  const root = document.documentElement;
+  const nav = parseFloat(getComputedStyle(root).getPropertyValue('--editor-nav')) || 0;
+  const visible = window.visualViewport?.height ?? window.innerHeight; // без экранной клавиатуры
+  const height = stageCol.offsetHeight;
+  root.classList.toggle('stage-loose', height > 0 && visible - nav - height < ROOM_UNDER_STAGE);
+  const stuck = height > 0 && getComputedStyle(stageCol).position === 'sticky';
+  root.style.scrollPaddingTop = `${Math.round(nav + (stuck ? height : 0) + 12)}px`;
+}
+
+new ResizeObserver(syncStageRoom).observe(stageCol);
+window.addEventListener('resize', syncStageRoom);
+window.visualViewport?.addEventListener('resize', syncStageRoom);
 
 /* ---------- Файл, перенесённый мимо сцены ----------
    Без этого браузер открыл бы файл вместо редактора — и несохранённое пропало бы. */

@@ -1,6 +1,6 @@
 {
   "name": "krafen-overlay-platform",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "Платформа интерактивных стрим-оверлеев для OBS в визуальной системе krafen.me",
   "type": "module",

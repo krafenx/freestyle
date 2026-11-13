@@ -36,6 +36,16 @@ const CONTENT_SECURITY_POLICY = [
   "form-action 'self'",
 ].join('; ');
 
+/* Сколько сервер ждёт запрос целиком. Обычный запрос приходит за доли секунды, но файл
+   по медленной связи идёт долго: видео в 50 МБ при скорости 1 Мбит/с — почти семь минут.
+   Встроенный срок Node.js — пять минут — оборвал бы такую загрузку без объяснений. Полчаса
+   хватает при скорости от 230 кбит/с. «Зависшую» загрузку раньше обрывает срок молчания
+   (uploadIdleMs в scene.js). */
+const REQUEST_TIME_LIMIT_MS = 30 * 60 * 1000;
+
+// Сколько при остановке сервера ждать запросы, которые ещё выполняются
+const STOP_GRACE_MS = 5000;
+
 // Из папки шрифтов наружу отдаются только описания начертаний и сами файлы шрифтов
 const FONT_ASSET_PATTERN = /^\/[a-z0-9-]+\/(?:\d{3}(?:-italic)?\.css|files\/[a-z0-9-]+\.woff2?)$/;
 
@@ -46,6 +56,7 @@ export function createOverlayServer(overrides = {}) {
   const db = openDatabase(config.dbPath);
   const app = express();
   const httpServer = http.createServer(app);
+  httpServer.requestTimeout = REQUEST_TIME_LIMIT_MS;
 
   // Аккаунты. Часы, стоимость проверки пароля и пороги попыток подменяются только в проверках
   const accounts = createAccounts({
@@ -301,16 +312,30 @@ export function createOverlayServer(overrides = {}) {
     return { host: config.host, port: actualPort };
   }
 
-  async function stop() {
-    clearInterval(cleanupTimer);
-    await realtime.close();
-    await new Promise((resolve) => {
-      if (!httpServer.listening) return resolve();
-      httpServer.close(() => resolve());
-      // Не ждём, пока браузеры сами закроют «спящие» соединения
-      httpServer.closeIdleConnections?.();
-    });
-    db.close();
+  /* Остановка. Новые запросы не принимаются; тем, что уже выполняются, даётся несколько
+     секунд. Ждать их без срока нельзя: загрузка файла или показ видео в открытом редакторе
+     длятся долго, и сервер не смог бы перезапуститься, пока у кого-то открыта страница.
+     Оборванная загрузка ничего после себя не оставляет — человек её просто повторит. */
+  let stopping = null;
+  function stop({ graceMs = STOP_GRACE_MS } = {}) {
+    stopping ??= (async () => {
+      clearInterval(cleanupTimer);
+      await realtime.close();
+      await new Promise((resolve) => {
+        if (!httpServer.listening) return resolve();
+        const force = setTimeout(() => httpServer.closeAllConnections?.(), graceMs);
+        httpServer.close(() => {
+          clearTimeout(force);
+          resolve();
+        });
+        // Не ждём, пока браузеры сами закроют «спящие» соединения
+        httpServer.closeIdleConnections?.();
+      });
+      // Оборванные загрузки убирают за собой недокачанные файлы — и только потом закрывается база
+      await scene.settle();
+      db.close();
+    })();
+    return stopping;
   }
 
   return {

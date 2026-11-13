@@ -68,10 +68,14 @@
         <div class="card-label">сцена площадки</div>
         <h1 class="editor-name" id="ws-name">Загрузка…</h1>
       </div>
+      <!-- Значки состояния занимают постоянное место (см. editor.css): шапка не перестраивается,
+           когда меняется надпись о сохранении или начинается загрузка файла -->
       <div class="editor-bar-side">
-        <span class="status-badge muted" id="ws-role" hidden></span>
-        <span class="status-badge amber" id="upload-status" role="status" hidden></span>
         <span class="status-badge muted" id="save-status" role="status" hidden></span>
+        <span class="editor-bar-slot" id="status-slot">
+          <span class="status-badge muted" id="ws-role" hidden></span>
+          <span class="status-badge amber" id="upload-status" role="status" hidden></span>
+        </span>
       </div>
       <div class="editor-bar-actions">
         <button class="btn-action" type="button" id="library-open" disabled>Файлы</button>

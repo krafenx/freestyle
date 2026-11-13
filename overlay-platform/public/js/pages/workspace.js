@@ -23,6 +23,9 @@ const $ = (id) => document.getElementById(id);
 const workspaceId = window.location.pathname.split('/').filter(Boolean).pop() || '';
 const api = (suffix = '') => `/api/workspaces/${encodeURIComponent(workspaceId)}${suffix}`;
 
+// Редактор сцены этой площадки. Откроется ли он, решает сервер — так же, как эта страница
+$('editor-link').setAttribute('href', `/app/w/${encodeURIComponent(workspaceId)}/editor`);
+
 let current = null; // то, что сервер прислал в последний раз: { workspace, members, invites?, limits? }
 let live = null; // живой канал площадки
 let departing = false; // площадку удаляют или покидают: страница вот-вот сменится
@@ -130,9 +133,9 @@ function render({ workspace, members, invites = [], limits = null }) {
   // Команда
   $('team-count').textContent = countOf(members.length, ['человек', 'человека', 'человек']);
   $('team-text').textContent = isOwner
-    ? 'Модераторы видят площадку и её команду, а с этапа 5 будут управлять сценой наравне с вами. '
+    ? 'Модераторы управляют сценой наравне с вами. '
       + 'Приглашать и убирать людей, переименовывать и удалять площадку можете только вы.'
-    : 'Вы видите площадку и её команду, а с этапа 5 будете управлять сценой наравне с владельцем. '
+    : 'Вы управляете сценой наравне с владельцем. '
       + 'Приглашает и убирает модераторов только владелец.';
   $('team-list').replaceChildren(...members.map((member) => memberRow(member, isOwner)));
 

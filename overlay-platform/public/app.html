@@ -72,16 +72,12 @@
         </button>
         <button class="sidebar-link" type="button" role="tab" id="tab-plan" aria-selected="false" aria-controls="pane-plan" tabindex="-1">
           <span>План работ</span>
-          <span class="mono">4 / 9</span>
-        </button>
-        <button class="sidebar-link" type="button" role="tab" id="tab-editor" aria-selected="false" aria-controls="pane-editor" tabindex="-1">
-          <span>Каркас редактора</span>
-          <span class="mono">16:9</span>
+          <span class="mono">5 / 9</span>
         </button>
       </div>
 
       <div class="notice-box">
-        Редактор сцены появится на <strong>этапе 5</strong>, ссылка для OBS — на этапе 6.
+        Редактор сцены открывается с карточки площадки. Ссылка для OBS появится на <strong>этапе 6</strong>.
       </div>
 
       <button class="btn-action" type="button" data-atmo-toggle aria-pressed="false">
@@ -98,6 +94,7 @@
           <p class="sec-sub" style="margin-top: 10px; max-width: 680px;">
             Площадка — это одна сцена оверлея и команда, которая ею управляет. Создайте свою
             или примите приглашение от другого стримера: его площадка появится здесь же.
+            Сцену собирают в редакторе — он открывается с карточки площадки.
           </p>
           <div class="form-actions" style="margin-top: 20px;">
             <button class="btn-primary sm" type="button" id="workspace-new-btn" data-open-modal="modal-workspace-new" disabled>Создать площадку</button>
@@ -117,7 +114,7 @@
 
         <div class="empty-box" id="workspace-empty" hidden>
           <div class="big">00</div>
-          <p>Площадок пока нет. Создайте первую — и пригласите в неё модераторов</p>
+          <p>Площадок пока нет. Создайте первую — и соберите в редакторе её сцену</p>
         </div>
       </section>
 
@@ -222,11 +219,12 @@
       <!-- Раздел 3: план работ с честными статусами -->
       <section id="pane-plan" role="tabpanel" aria-labelledby="tab-plan" class="stack" style="gap: 20px;" hidden>
         <div class="glass pad-card">
-          <div class="sec-eyebrow" style="margin-bottom: 12px;">этап 4 из 9 завершён</div>
+          <div class="sec-eyebrow" style="margin-bottom: 12px;">этап 5 из 9 завершён</div>
           <h1 class="pane-title">План работ</h1>
           <p class="sec-sub" style="margin-top: 10px; max-width: 680px;">
-            Готовы основа, вход и площадки: аккаунты, команда из владельца и модераторов,
-            приглашения по ссылке и проверка прав на сервере. Ниже — что уже сделано и что на очереди.
+            Готовы основа, вход, площадки и редактор сцены: источники семи типов, слои, файлы
+            и сохранение каждой правки на сервере. В OBS сцена попадёт на следующем этапе.
+            Ниже — что уже сделано и что на очереди.
           </p>
         </div>
 
@@ -267,19 +265,19 @@
             <p class="stage-card-text">Создание площадки, приглашение и отзыв модераторов, проверка прав.</p>
           </div>
 
-          <div class="glass pad-card-sm" style="border-color: rgba(163, 19, 19, 0.45);">
-            <div class="row between">
-              <span class="card-label mono" style="color: var(--crimson-light);">этап 05</span>
-              <span class="status-badge crimson"><span class="dot"></span>следующий</span>
-            </div>
-            <div class="stage-card-title">Редактор</div>
-            <p class="stage-card-text">Сцена, источники, слои, перемещение, размеры и настройки объектов.</p>
-          </div>
-
           <div class="glass pad-card-sm">
             <div class="row between">
-              <span class="card-label mono">этап 06</span>
-              <span class="status-badge muted">в очереди</span>
+              <span class="card-label mono">этап 05</span>
+              <span class="status-badge ok"><span class="dot"></span>готово</span>
+            </div>
+            <div class="stage-card-title">Редактор</div>
+            <p class="stage-card-text">Сцена, семь типов источников, слои, перемещение, размеры, свойства, файлы.</p>
+          </div>
+
+          <div class="glass pad-card-sm" style="border-color: rgba(163, 19, 19, 0.45);">
+            <div class="row between">
+              <span class="card-label mono" style="color: var(--crimson-light);">этап 06</span>
+              <span class="status-badge crimson"><span class="dot"></span>следующий</span>
             </div>
             <div class="stage-card-title">Оверлей для OBS</div>
             <p class="stage-card-text">Ссылка площадки, прозрачный фон, точное отображение сцены.</p>
@@ -310,48 +308,6 @@
             </div>
             <div class="stage-card-title">Подготовка к запуску</div>
             <p class="stage-card-text">Настройка сервера, резервные копии и публикация.</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- Раздел 4: раскладка будущего редактора -->
-      <section id="pane-editor" role="tabpanel" aria-labelledby="tab-editor" hidden>
-        <div class="glass pad-card-sm row between" style="margin-bottom: 16px;">
-          <div>
-            <div class="card-label">раскладка рабочего места</div>
-            <h1 class="pane-title" style="font-size: 24px; margin-top: 4px;">Каркас редактора</h1>
-          </div>
-          <span class="status-badge amber">макет · объекты появятся на этапе 5</span>
-        </div>
-
-        <div class="studio-skeleton">
-          <div class="glass pad-card-sm studio-col">
-            <div class="field-label" style="margin: 0;">Слои</div>
-            <div class="empty-box" style="padding: 26px 14px;">
-              <div class="big" style="font-size: 32px;">00</div>
-              <p style="font-size: 15px;">Здесь будет список источников: порядок, видимость и защита от сдвига</p>
-            </div>
-          </div>
-
-          <div class="glass pad-card-sm studio-col">
-            <div class="row between">
-              <span class="field-label" style="margin: 0;">Сцена</span>
-              <span class="mono" style="font-size: 11px; color: var(--label);">1920 × 1080</span>
-            </div>
-            <div class="stage-preview-frame">
-              <div class="stage-placeholder">
-                <div class="big">1920 × 1080</div>
-                <p>Тёмная клетка — прозрачный фон. В OBS на этом месте будет видна игра или камера</p>
-              </div>
-            </div>
-          </div>
-
-          <div class="glass pad-card-sm studio-col">
-            <div class="field-label" style="margin: 0;">Свойства</div>
-            <div class="notice-box">
-              Здесь будут настройки выбранного источника — свои для текста, картинки, видео,
-              фигуры, таймера и виджета.
-            </div>
           </div>
         </div>
       </section>

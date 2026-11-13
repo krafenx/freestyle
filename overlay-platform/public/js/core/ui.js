@@ -4,8 +4,10 @@
    ========================================================================== */
 
 /* Текст от пользователя или с сервера вставляется на страницу только через
-   textContent — как текст, а не как разметка. Сборки разметки из строк
-   (innerHTML) в проекте нет: это проверяется тестом. */
+   textContent — как текст, а не как разметка. Страницы не собирают разметку из строк
+   (innerHTML и подобное): это проверяется тестом. Единственное место, где разметку
+   пишет сам человек, — свой блок виджета; он показывается в отдельной рамке без
+   скриптов (js/scene/html-block.js). */
 
 /* ---------- Всплывающее уведомление ---------- */
 let toastTimer = null;
@@ -48,7 +50,7 @@ export function openModal(id) {
   if (!el || el.classList.contains('open')) return;
   modalReturnFocus.set(id, document.activeElement);
   el.classList.add('open');
-  document.body.classList.add('modal-open');
+  document.documentElement.classList.add('modal-open'); // страница под окном не прокручивается (tokens.css)
   // Фокус переносим внутрь окна, чтобы клавиатура работала с ним, а не со страницей под ним
   const target = el.querySelector('[data-autofocus]') || el.querySelector(FOCUSABLE);
   target?.focus({ preventScroll: true });
@@ -59,7 +61,7 @@ export function closeModal(id) {
   if (!el || !el.classList.contains('open')) return;
   el.classList.remove('open');
   if (!document.querySelector('.modal.open')) {
-    document.body.classList.remove('modal-open');
+    document.documentElement.classList.remove('modal-open');
   }
   const back = modalReturnFocus.get(id);
   modalReturnFocus.delete(id);
@@ -182,14 +184,14 @@ export function initMobileNav() {
   const close = () => {
     if (!drawer.classList.contains('open')) return;
     drawer.classList.remove('open');
-    document.body.classList.remove('nav-open');
+    document.documentElement.classList.remove('nav-open');
     toggle.setAttribute('aria-expanded', 'false');
     toggle.focus({ preventScroll: true });
   };
 
   const open = () => {
     drawer.classList.add('open');
-    document.body.classList.add('nav-open');
+    document.documentElement.classList.add('nav-open');
     toggle.setAttribute('aria-expanded', 'true');
     closeBtn?.focus({ preventScroll: true });
   };

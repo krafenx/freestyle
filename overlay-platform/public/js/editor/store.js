@@ -70,6 +70,7 @@ export function createStore({ workspaceId, clientId, notify }) {
   let retryTimer = null;
   let retryStep = 0;
   let offline = false;
+  let silence = null; // последний ответ, которого по существу не было: нет связи, сбой, просьба подождать
   let gone = false;
   let saveState = 'saved';
 
@@ -190,12 +191,21 @@ export function createStore({ workspaceId, clientId, notify }) {
     clearTimeout(flushTimer);
     clearTimeout(retryTimer);
     clearTimeout(refetchTimer);
+    /* Сцена этому человеку больше не доступна — её копия со страницы убирается целиком:
+       иначе под надписью «сцена недоступна» продолжали бы идти таймеры и играть ролики,
+       а в списках оставались бы чужие тексты и названия файлов. */
+    state.ready = false;
+    state.sources = [];
+    state.media = [];
+    state.selectedId = null;
+    emit('change', { kind: 'all' });
     setSave();
     emit('gone');
   }
 
   function backOnline() {
     offline = false;
+    silence = null;
     retryStep = 0;
     clearTimeout(retryTimer);
     retryTimer = null;
@@ -227,6 +237,7 @@ export function createStore({ workspaceId, clientId, notify }) {
   function refused(res, { requeue, sourceId } = {}) {
     const code = res.data?.error;
     if (noAnswer(res)) {
+      silence = res;
       requeue?.();
       goOffline(res.status === 429 ? (Number(res.data?.retryAfterSeconds) || 5) * 1000 : 0);
       return false;
@@ -275,6 +286,16 @@ export function createStore({ workspaceId, clientId, notify }) {
       if (!(await sendPatch(id))) return false;
     }
     return true;
+  }
+
+  /* Перед командой («добавить», «скопировать», «пуск таймера») уходят накопленные правки:
+     иначе команда выполнилась бы над устаревшим источником. Не ушли — значит, сервер молчит,
+     и команда не выполняется. Сама страница её не повторит, поэтому человеку об этом говорят:
+     без сообщения нажатие выглядело бы так, будто кнопка не работает. */
+  async function sendPendingFirst() {
+    if (await sendAllPending()) return true;
+    if (silence) notify(describeError(silence), 'error');
+    return false;
   }
 
   function flush(force = false) {
@@ -378,16 +399,20 @@ export function createStore({ workspaceId, clientId, notify }) {
     flush: () => flush(),
     flushUrgent,
 
-    // Связь вернулась — не ждём таймера
+    /* Связь вернулась (так говорит браузер) или человек вернулся на вкладку — не ждём таймера.
+       Повторы снова идут часто: первая попытка нередко срывается, потому что сеть «поднялась»
+       ещё не до конца, и без этого следующая была бы только через 8–15 секунд. */
     wake() {
-      if (offline || needRefetch) retry();
+      if (!offline && !needRefetch) return;
+      retryStep = 0;
+      retry();
     },
 
     hasUnsaved: () => pending.size > 0 || writes > 0,
 
     create(type, props) {
       return enqueue(async () => {
-        if (!(await sendAllPending())) return null;
+        if (!(await sendPendingFirst())) return null;
         const res = await call('POST', '/sources', props ? { type, props } : { type });
         if (!res.ok) {
           commandFailed(res);
@@ -404,7 +429,7 @@ export function createStore({ workspaceId, clientId, notify }) {
 
     duplicate(id) {
       return enqueue(async () => {
-        if (!(await sendAllPending())) return null;
+        if (!(await sendPendingFirst())) return null;
         const res = await call('POST', `/sources/${encodeURIComponent(id)}/duplicate`);
         if (!res.ok) {
           commandFailed(res, id);
@@ -465,7 +490,7 @@ export function createStore({ workspaceId, clientId, notify }) {
     // Команда источнику (таймеру: пуск, пауза, сброс). Время считает сервер
     command(id, action) {
       return enqueue(async () => {
-        if (!(await sendAllPending())) return false;
+        if (!(await sendPendingFirst())) return false;
         const res = await call('POST', `/sources/${encodeURIComponent(id)}/command`, { action });
         if (!res.ok) {
           commandFailed(res, id);

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Оверлей — krafen studio</title>
+  <meta name="robots" content="noindex">
+  <meta name="referrer" content="no-referrer">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/styles/fonts.css">
+  <link rel="stylesheet" href="/styles/scene.css">
+  <link rel="stylesheet" href="/styles/overlay.css">
+  <script type="module" src="/js/pages/overlay.js"></script>
+</head>
+<!-- Страница для OBS (источник «Браузер»): только сцена на прозрачном фоне.
+     Здесь намеренно нет ни шапки, ни зерна, ни дождя, ни кнопок: всё, что нарисует
+     эта страница, попадёт в эфир. Страница одна на все площадки — в самой разметке
+     нет ни сцены, ни ссылки: сцену присылает сервер по ссылке оверлея из адреса.
+     Источники собирает тот же модуль, что и в редакторе (js/scene/view.js). -->
+<body>
+  <!-- Строка проверки. Видна только во вкладке «Проверить в браузере»; в OBS её нет -->
+  <div class="overlay-bar" id="overlay-bar" hidden>
+    <div class="overlay-bar-title">проверка оверлея</div>
+    <div class="overlay-bar-status" id="overlay-status" role="status">Загружаю сцену…</div>
+    <div class="overlay-bar-hint">Тёмная подложка и эта строка видны только здесь. В OBS фон прозрачный.</div>
+  </div>
+
+  <div class="overlay-fit" id="overlay-fit">
+    <!-- Границы сцены на подложке «в клетку» — тоже только для проверки -->
+    <div class="overlay-bounds" id="overlay-bounds" hidden></div>
+    <div class="overlay-stage" id="overlay-stage"></div>
+  </div>
+</body>
+</html>

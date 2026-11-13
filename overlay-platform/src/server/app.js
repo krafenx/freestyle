@@ -8,6 +8,7 @@ import { createAuthHttp, crossSiteGuard } from './auth/http.js';
 import { isLinkToken } from './auth/tokens.js';
 import { loadConfig } from './config.js';
 import { openDatabase } from './db/database.js';
+import { createOverlayHttp } from './overlay/http.js';
 import { createSceneHttp } from './scene/http.js';
 import { createScene } from './scene/scene.js';
 import { createMediaStorage } from './scene/storage.js';
@@ -97,15 +98,19 @@ export function createOverlayServer(overrides = {}) {
 
   /* Живой канал связи. В канал площадки попадает только тот, у кого действует вход
      и кто прямо сейчас её владелец или модератор; это же проверяется перед каждой
-     отправкой сообщения. */
+     отправкой сообщения. Оверлей попадает в свой канал по действующей ссылке оверлея —
+     и она тоже проверяется перед каждой отправкой. */
   const realtime = createRealtimeHub(httpServer, {
     now: overrides.now,
     guard: ({ workspaceId, userId, sessionId }) =>
       (accounts.isSessionAlive(sessionId) ? workspaces.roleOf({ userId, workspaceId }) : null),
+    overlayGuard: (token) => workspaces.overlayTarget({ token }),
+    ...overrides.realtimeLimits,
   });
 
   const workspacesHttp = createWorkspacesHttp({ workspaces, realtime, auth: authHttp.api });
   const sceneHttp = createSceneHttp({ scene, auth: authHttp.api });
+  const overlayHttp = createOverlayHttp({ scene, reply: authHttp.api.reply });
 
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -131,6 +136,9 @@ export function createOverlayServer(overrides = {}) {
   // Площадки и приглашения
   app.use('/api/workspaces', workspacesHttp.workspacesRouter);
   app.use('/api/invites', workspacesHttp.invitesRouter);
+
+  // Сцена для оверлея в OBS: по ссылке оверлея, без входа и только на чтение
+  app.use('/api/overlay', overlayHttp.apiRouter);
 
   app.use(express.json({ limit: '1mb' }));
 
@@ -160,7 +168,7 @@ export function createOverlayServer(overrides = {}) {
     res.json({
       ok: true,
       service: 'krafen-overlay-platform',
-      stage: 5,
+      stage: 6,
       serverTime: new Date().toISOString(),
       db: db.getHealth(),
       realtime: realtime.getStats(),
@@ -173,6 +181,8 @@ export function createOverlayServer(overrides = {}) {
 
   // Загруженные файлы: только участникам площадки и только как данные (см. scene/http.js)
   app.use('/media', sceneHttp.mediaRouter);
+  // Те же файлы для оверлея: по ссылке оверлея и только те, что сейчас показаны на сцене
+  app.use('/overlay', overlayHttp.mediaRouter);
 
   // Файлы интерфейса. no-cache = браузер каждый раз сверяется с сервером
   // и после обновления платформы не показывает устаревшую страницу.
@@ -238,6 +248,30 @@ export function createOverlayServer(overrides = {}) {
     res.setHeader('Referrer-Policy', 'no-referrer');
     next();
   }, page('invite.html', privatePageOptions));
+
+  /* Оверлей для OBS: только сцена на прозрачном фоне. Страница открыта без входа и одна
+     на все площадки — данных в ней нет; что показать, решает запрос сцены по ссылке
+     оверлея. Ссылка — секрет: браузеру запрещено сообщать адрес страницы другим сайтам
+     и запоминать её.
+
+     Всё, что начинается с /overlay, отвечает этой же прозрачной страницей — даже адрес,
+     набранный с ошибкой. Обычная страница «не найдено» здесь недопустима: OBS показал бы
+     её в эфире поверх трансляции, а пустой оверлей просто ничего не рисует. */
+  const overlayPage = (status) => (_req, res) => {
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.status(status).sendFile(path.join(config.publicDir, 'overlay.html'), privatePageOptions);
+  };
+  const opensPage = (req) => req.method === 'GET' || req.method === 'HEAD';
+  app.get('/overlay/:token', overlayPage(200));
+  app.use('/overlay', (req, res, next) => {
+    if (opensPage(req)) overlayPage(404)(req, res);
+    else next();
+  });
+  // То же, когда сам адрес испорчен настолько, что его не удалось разобрать (обрывок «%E0%A4» и подобное)
+  app.use('/overlay', (err, req, res, next) => {
+    if (opensPage(req) && !res.headersSent) overlayPage(404)(req, res);
+    else next(err);
+  });
 
   // Вход, регистрация и восстановление — только для тех, кто ещё не вошёл
   for (const name of ['login', 'register', 'recover']) {

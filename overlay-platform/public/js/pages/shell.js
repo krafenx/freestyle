@@ -88,14 +88,15 @@ function workspaceCard(workspace) {
     ? `${team} · создана ${formatDay(workspace.createdAt)}`
     : `владелец: ${workspace.ownerName} · вы в команде с ${formatDay(workspace.joinedAt)}`;
 
-  // Два входа: редактор сцены и страница площадки (команда, приглашения, настройки)
+  // Два входа: редактор сцены и страница площадки (ссылка для OBS, команда, приглашения, настройки).
+  // Ссылку для OBS видит только владелец — поэтому и кнопка у него называется иначе
   const actions = el('div', 'workspace-card-actions');
   const editor = el('a', 'btn-primary sm', 'Редактор сцены');
   editor.href = `${address}/editor`;
   editor.setAttribute('aria-label', `Редактор сцены: ${workspace.name}`);
-  const teamPage = el('a', 'btn-action', 'Команда');
+  const teamPage = el('a', 'btn-action', isOwner ? 'OBS и команда' : 'Команда');
   teamPage.href = address;
-  teamPage.setAttribute('aria-label', `Команда и настройки: ${workspace.name}`);
+  teamPage.setAttribute('aria-label', `${isOwner ? 'Ссылка для OBS, команда и настройки' : 'Команда'}: ${workspace.name}`);
   actions.append(editor, teamPage);
 
   card.append(top, name, el('div', 'workspace-card-meta', meta), actions);

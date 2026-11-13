@@ -8,7 +8,7 @@ import {
 import { describeError, fetchSession, goToLogin, request, send } from '../core/session.js';
 import { bindModalDismiss, closeModal, initMobileNav, openModal, toast } from '../core/ui.js';
 
-/* Страница площадки: команда, приглашения, название, удаление.
+/* Страница площадки: сцена, ссылка для OBS, команда, приглашения, название, удаление.
    Страница только показывает то, что прислал сервер, и прячет кнопки, которые
    человеку недоступны. Права проверяет сервер — при каждом действии. */
 
@@ -26,7 +26,7 @@ const api = (suffix = '') => `/api/workspaces/${encodeURIComponent(workspaceId)}
 // Редактор сцены этой площадки. Откроется ли он, решает сервер — так же, как эта страница
 $('editor-link').setAttribute('href', `/app/w/${encodeURIComponent(workspaceId)}/editor`);
 
-let current = null; // то, что сервер прислал в последний раз: { workspace, members, invites?, limits? }
+let current = null; // то, что сервер прислал в последний раз: { workspace, members, invites?, limits?, overlay? }
 let live = null; // живой канал площадки
 let departing = false; // площадку удаляют или покидают: страница вот-вот сменится
 
@@ -43,6 +43,7 @@ function showGone() {
   // Открытые окна относились к площадке, которой для этого человека больше нет
   document.querySelectorAll('.modal.open').forEach((modal) => closeModal(modal.id));
   $('invite-link-value').textContent = '';
+  forgetOverlayLink();
   $('ws-name').textContent = 'Площадка недоступна';
   $('ws-facts').hidden = true;
   $('ws-note').hidden = true;
@@ -112,11 +113,37 @@ function inviteRow(invite) {
   return row;
 }
 
+/* ---------- Ссылка для OBS ----------
+   Саму ссылку сервер присылает только владельцу. На странице она прикрыта: кабинет
+   нередко открыт на том же экране, который идёт в эфир, а по ссылке сцену увидит любой.
+   Скопировать её можно и не открывая. */
+const overlayValue = $('overlay-link-value');
+const overlayReveal = $('overlay-reveal');
+const OVERLAY_COVER = '•'.repeat(12);
+let overlayLink = ''; // секретная часть адреса
+let overlayOpen = false; // показана ли ссылка на странице целиком
+
+// Адрес сайта берётся у самой страницы: ссылка ведёт туда же, где открыт кабинет
+const overlayAddress = (link) => `${window.location.origin}/overlay/${link}`;
+
+function showOverlayLink() {
+  overlayValue.textContent = overlayOpen ? overlayAddress(overlayLink) : overlayAddress(OVERLAY_COVER);
+  overlayReveal.textContent = overlayOpen ? 'Скрыть' : 'Показать';
+  overlayReveal.setAttribute('aria-pressed', String(overlayOpen));
+}
+
+// Ссылки на странице больше нет: ни на экране, ни в памяти
+function forgetOverlayLink() {
+  overlayLink = '';
+  overlayOpen = false;
+  overlayValue.textContent = '';
+}
+
 /* ---------- Показ данных ---------- */
 const renameInput = $('rename-name');
 let renameShown = ''; // название, которое страница сама поставила в поле
 
-function render({ workspace, members, invites = [], limits = null }) {
+function render({ workspace, members, invites = [], limits = null, overlay = null }) {
   const isOwner = workspace.role === 'owner';
   const moderators = members.filter((member) => member.role === 'moderator').length;
 
@@ -138,6 +165,21 @@ function render({ workspace, members, invites = [], limits = null }) {
     : 'Вы управляете сценой наравне с владельцем. '
       + 'Приглашает и убирает модераторов только владелец.';
   $('team-list').replaceChildren(...members.map((member) => memberRow(member, isOwner)));
+
+  // Ссылка для OBS: владельцу — сама ссылка, модератору — пояснение
+  const hasLink = isOwner && Boolean(overlay?.token);
+  $('overlay-owner').hidden = !hasLink;
+  $('overlay-moderator').hidden = isOwner;
+  $('overlay-issued').hidden = !hasLink;
+  if (hasLink) {
+    // Новая ссылка снова прикрыта, даже если прежняя была открыта
+    if (overlay.token !== overlayLink) overlayOpen = false;
+    overlayLink = overlay.token;
+    $('overlay-issued').textContent = `выпущена ${formatDay(overlay.createdAt)}`;
+    showOverlayLink();
+  } else {
+    forgetOverlayLink();
+  }
 
   // Что доступно только владельцу, а что — только модератору
   $('invites-card').hidden = !isOwner;
@@ -332,6 +374,61 @@ $('leave-open').addEventListener('click', () => {
       window.location.assign('/app');
     },
   });
+});
+
+/* ---------- Ссылка для OBS: действия ---------- */
+overlayReveal.addEventListener('click', () => {
+  if (!overlayLink) return;
+  overlayOpen = !overlayOpen;
+  showOverlayLink();
+});
+
+$('overlay-copy').addEventListener('click', async () => {
+  if (!overlayLink) return;
+  if (await copyText(overlayAddress(overlayLink))) toast('Ссылка для OBS скопирована', 'ok');
+  else toast('Не получилось скопировать — нажмите «Показать», выделите ссылку и скопируйте вручную', 'error');
+});
+
+/* Вкладка проверки: та же сцена, что увидит OBS, но на тёмной подложке — в обычной вкладке
+   прозрачный фон выглядит белым, и светлые надписи на нём не видны. Ссылка передаётся после
+   «#» (на сервер эта часть адреса не уходит), а вкладка сразу убирает её из адресной строки.
+   Это кнопка, а не ссылка, намеренно: у ссылки браузер показывает адрес при наведении. */
+$('overlay-check').addEventListener('click', () => {
+  if (!overlayLink) return;
+  const tab = window.open(`/overlay/check#${overlayLink}`, '_blank');
+  if (tab) tab.opener = null;
+  else toast('Браузер не дал открыть новую вкладку. Разрешите этому сайту открывать окна и нажмите ещё раз', 'error');
+});
+
+$('overlay-renew').addEventListener('click', () => {
+  // Ссылки на странице нет — значит, человек не владелец: окно ему не предлагается
+  if (!current || !overlayLink) return;
+  askConfirm({
+    eyebrow: 'оверлей',
+    title: 'Выпустить новую ссылку',
+    text: 'Прежняя ссылка сразу перестанет работать: оверлей в OBS погаснет и не вернётся, '
+      + 'пока вы не вставите туда новую ссылку. Сцена и команда останутся как есть.',
+    action: 'Выпустить новую',
+    busy: 'Выпускаем…',
+    run: () => send(api('/overlay/renew')),
+    done(res) {
+      // Новая ссылка уже в ответе — показываем её сразу, не дожидаясь перечитывания площадки
+      if (current && res.data?.overlay) {
+        current = { ...current, overlay: res.data.overlay };
+        render(current);
+      }
+      toast('Новая ссылка готова. Вставьте её в OBS вместо прежней', 'ok');
+      refresh();
+    },
+  });
+});
+
+// Страницу свернули или ушли на другую вкладку — открытая ссылка снова прикрывается
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden && overlayOpen) {
+    overlayOpen = false;
+    showOverlayLink();
+  }
 });
 
 /* ---------- Новое приглашение ---------- */

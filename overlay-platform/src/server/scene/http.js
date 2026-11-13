@@ -15,6 +15,23 @@ const COMMAND_BODY_LIMIT = '256kb';
 
 const handle = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 
+/* Отдать загруженный файл. Одинаково для редактора и для оверлея: тип берётся из базы —
+   тот, что определён по содержимому при загрузке, — и браузеру запрещено его «угадывать»
+   самому. file — то, что вернули правила сцены: где лежит файл и какого он типа. */
+export function sendMedia(res, file, next) {
+  res.setHeader('Content-Type', file.mime);
+  res.setHeader('Content-Security-Policy', MEDIA_SECURITY_POLICY);
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  // Браузер хранит файл, но перед каждым показом спрашивает сервер: права проверяются заново
+  res.setHeader('Cache-Control', 'private, no-cache');
+  res.sendFile(file.name, { root: file.root, cacheControl: false, dotfiles: 'deny' }, (err) => {
+    if (!err) return;
+    // Оборванную человеком загрузку ошибкой не считаем
+    if (res.headersSent) res.end();
+    else next(err);
+  });
+}
+
 export function createSceneHttp({ scene, auth }) {
   /* Кто просит — всегда из сеанса входа, а не из присланных данных. origin — метка
      страницы: не право и не секрет, по ней страница узнаёт в рассылке свою же правку. */
@@ -105,23 +122,12 @@ export function createSceneHttp({ scene, auth }) {
 
   /* ---------- /media/<площадка>/<файл> ----------
      Сам файл. Отдаётся только участнику площадки; гость и посторонний получают тот же
-     ответ, что и на несуществующий файл. Тип берётся из базы — тот, что определён
-     по содержимому при загрузке, — и браузеру запрещено его «угадывать» самому. */
+     ответ, что и на несуществующий файл. Оверлей берёт файлы по своему адресу и своей
+     ссылке — см. overlay/http.js. */
   const mediaRouter = express.Router();
 
   mediaRouter.get('/:id/:fileId', auth.identify, (req, res, next) => {
-    const file = scene.openMedia({ ...from(req), fileId: req.params.fileId });
-    res.setHeader('Content-Type', file.mime);
-    res.setHeader('Content-Security-Policy', MEDIA_SECURITY_POLICY);
-    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
-    // Браузер хранит файл, но перед каждым показом спрашивает сервер: права проверяются заново
-    res.setHeader('Cache-Control', 'private, no-cache');
-    res.sendFile(file.name, { root: file.root, cacheControl: false, dotfiles: 'deny' }, (err) => {
-      if (!err) return;
-      // Оборванную человеком загрузку ошибкой не считаем
-      if (res.headersSent) res.end();
-      else next(err);
-    });
+    sendMedia(res, scene.openMedia({ ...from(req), fileId: req.params.fileId }), next);
   });
 
   mediaRouter.use(auth.reply);

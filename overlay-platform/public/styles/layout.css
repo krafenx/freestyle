@@ -837,6 +837,11 @@ a.user-chip:hover {
   color: var(--silver-bright);
 }
 
+/* Абзац, которым карточка заканчивается: отступ снизу уже даёт сама карточка */
+.settings-text:last-child {
+  margin-bottom: 0;
+}
+
 .form-actions {
   display: flex;
   align-items: center;

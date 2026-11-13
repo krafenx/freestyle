@@ -1,5 +1,5 @@
 import { createRateLimiter } from '../auth/rate-limit.js';
-import { isLinkToken, newLinkToken, sha256Hex } from '../auth/tokens.js';
+import { isLinkToken, isOverlayToken, newLinkToken, newOverlayToken, sha256Hex } from '../auth/tokens.js';
 import { inTransaction } from '../db/database.js';
 import { AppError, isUniqueViolation } from '../errors.js';
 import { cleanLine, lengthOf } from '../text.js';
@@ -15,7 +15,12 @@ import { cleanLine, lengthOf } from '../text.js';
 
    Права проверяются здесь, при каждом действии: страница лишь прячет кнопки,
    которые человеку недоступны. Посторонний получает на любой запрос один и тот
-   же ответ «площадка не найдена» — существует она или нет. */
+   же ответ «площадка не найдена» — существует она или нет.
+
+   Ссылка оверлея — третий способ попасть в площадку, без входа в аккаунт: по ней
+   сцену открывает OBS. Она даёт только просмотр того, что сейчас в эфире, и больше
+   ничего. Видит и выпускает ссылку только владелец; новая ссылка сразу отменяет
+   прежнюю. */
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -34,6 +39,7 @@ export const DEFAULT_WORKSPACE_LIMITS = Object.freeze({
   // Защита от скриптов: человек столько за час не создаёт
   workspaceCreationsPerUser: { limit: 20, windowMs: HOUR },
   inviteCreationsPerUser: { limit: 60, windowMs: HOUR },
+  overlayRenewalsPerUser: { limit: 30, windowMs: HOUR },
 });
 
 const iso = (ms) => new Date(ms).toISOString();
@@ -75,10 +81,16 @@ export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = n
     `),
     ownedNames: db.prepare('SELECT id, name FROM workspaces WHERE owner_id = ?'),
     insertWorkspace: db.prepare(`
-      INSERT INTO workspaces (public_id, owner_id, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
+      INSERT INTO workspaces (public_id, owner_id, name, created_at, updated_at, overlay_token, overlay_token_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `),
     renameWorkspace: db.prepare('UPDATE workspaces SET name = ?, updated_at = ? WHERE id = ?'),
     deleteWorkspace: db.prepare('DELETE FROM workspaces WHERE id = ?'),
+
+    // Ссылка оверлея: читается только для владельца, ищется только по полной ссылке
+    overlayLink: db.prepare('SELECT overlay_token, overlay_token_at FROM workspaces WHERE id = ?'),
+    setOverlayLink: db.prepare('UPDATE workspaces SET overlay_token = ?, overlay_token_at = ?, updated_at = ? WHERE id = ?'),
+    overlayTarget: db.prepare('SELECT id, public_id FROM workspaces WHERE overlay_token = ?'),
 
     // Вместе с модератором — подпись приглашения, по которому он вошёл
     members: db.prepare(`
@@ -252,7 +264,8 @@ export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = n
     for (let attempt = 1; ; attempt += 1) {
       publicId = newLinkToken(PUBLIC_ID_LENGTH);
       try {
-        sql.insertWorkspace.run(publicId, userId, title, time, time);
+        // Ссылка оверлея есть у площадки с самого начала
+        sql.insertWorkspace.run(publicId, userId, title, time, time, newOverlayToken(), time);
         break;
       } catch (err) {
         // Случайный номер совпал с уже занятым — берём другой
@@ -293,6 +306,8 @@ export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = n
         moderators: rules.moderatorsPerWorkspace,
         pendingInvites: rules.pendingInvitesPerWorkspace,
       };
+      // Ссылка оверлея — тоже только владельцу
+      result.overlay = overlayLinkOf(row.id);
     }
     return result;
   }
@@ -465,6 +480,65 @@ export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = n
     return result;
   }
 
+  /* ---------- Ссылка оверлея ----------
+     По ней сцену открывает OBS: без входа, только на чтение. Ссылка у площадки одна.
+     Владелец видит её всегда — вставить в OBS приходится не один раз — и может
+     выпустить новую: прежняя перестаёт работать в тот же момент. */
+
+  function issueOverlayLink(workspaceRowId) {
+    const time = now();
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        sql.setOverlayLink.run(newOverlayToken(), time, time, workspaceRowId);
+        return;
+      } catch (err) {
+        // Случайная ссылка совпала с чужой — берём другую
+        if (!isUniqueViolation(err) || attempt >= 5) throw err;
+      }
+    }
+  }
+
+  function overlayLinkOf(workspaceRowId) {
+    let link = sql.overlayLink.get(workspaceRowId);
+    // Ссылка есть у каждой площадки. Если запись о ней всё же пропала, владелец получает новую
+    if (!link.overlay_token) {
+      issueOverlayLink(workspaceRowId);
+      link = sql.overlayLink.get(workspaceRowId);
+    }
+    return { token: link.overlay_token, createdAt: iso(link.overlay_token_at) };
+  }
+
+  function renewOverlayLink({ userId, workspaceId } = {}) {
+    const row = ownerAccess(userId, workspaceId);
+    const key = `overlay-renew:${userId}`;
+    assertNotTooOften(key, rules.overlayRenewalsPerUser);
+
+    issueOverlayLink(row.id);
+    limiter.hit(key, rules.overlayRenewalsPerUser);
+    // Страницы владельца покажут новую ссылку, а оверлеи, открытые по прежней, отключатся (ws/hub.js)
+    announce(row.public_id, 'overlay', { audience: 'owner', actorId: userId });
+    return { overlay: overlayLinkOf(row.id) };
+  }
+
+  function findOverlay(token) {
+    if (!isOverlayToken(token)) return null;
+    return sql.overlayTarget.get(token) || null;
+  }
+
+  /* Вход в площадку по ссылке оверлея — для сцены и её файлов (scene.js). Кто пришёл,
+     неизвестно и не важно: ссылка либо действует, либо нет. Отменённая, выдуманная
+     и ссылка удалённой площадки выглядят одинаково. */
+  function enterOverlay({ token } = {}) {
+    const row = findOverlay(token);
+    if (!row) throw new AppError('overlay_not_found', 404);
+    return { rowId: row.id, publicId: row.public_id };
+  }
+
+  // Куда ссылка оверлея ведёт прямо сейчас: номер площадки или null (для живого канала)
+  function overlayTarget({ token } = {}) {
+    return findOverlay(token)?.public_id ?? null;
+  }
+
   // Раз в час: просроченные приглашения и устаревшие счётчики
   function cleanup() {
     limiter.sweep();
@@ -486,6 +560,9 @@ export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = n
     revokeInvite,
     describeInvite,
     acceptInvite,
+    renewOverlayLink,
+    enterOverlay,
+    overlayTarget,
     cleanup,
   };
 }

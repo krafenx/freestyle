@@ -1,4 +1,4 @@
-import { checkSettings, defaultsOf, readSettings } from '../../../public/js/scene/schema.js';
+import { checkSettings, defaultsOf, isShown, readSettings } from '../../../public/js/scene/schema.js';
 import { sourceType } from '../../../public/js/scene/sources/index.js';
 import { createRateLimiter } from '../auth/rate-limit.js';
 import { isLinkToken, newLinkToken } from '../auth/tokens.js';
@@ -16,9 +16,13 @@ import { cleanLine, lengthOf } from '../text.js';
    проверка, что у страницы площадки, и для постороннего ответ тот же — «площадка
    не найдена». Своей проверки прав у сцены нет.
 
+   Оверлей — исключение: страница в OBS не входит в аккаунт, площадку ей открывает
+   ссылка оверлея (workspaces.enterOverlay). По ссылке можно только читать, и только
+   то, что сейчас в эфире. Действует ли ссылка, решают тоже площадки.
+
    Версия сцены растёт на единицу при каждом сохранённом изменении. После него
-   открытые страницы площадки получают сигнал с номером версии и перечитывают
-   сцену обычным запросом. */
+   открытые страницы площадки и оверлеи получают сигнал с номером версии и
+   перечитывают сцену обычным запросом. */
 
 const MB = 1024 * 1024;
 
@@ -108,6 +112,11 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
     sourceById: db.prepare(`
       SELECT ${SOURCE_COLUMNS} FROM sources s LEFT JOIN media_files m ON m.id = s.media_id WHERE s.id = ?
     `),
+    // Для оверлея: только то, что показано
+    visibleSources: db.prepare(`
+      SELECT ${SOURCE_COLUMNS} FROM sources s LEFT JOIN media_files m ON m.id = s.media_id
+      WHERE s.workspace_id = ? AND s.visible = 1 ORDER BY s.layer, s.id
+    `),
     countSources: db.prepare('SELECT COUNT(*) AS n FROM sources WHERE workspace_id = ?'),
     sourceCorners: db.prepare('SELECT x, y FROM sources WHERE workspace_id = ?'),
     sourceNames: db.prepare('SELECT name FROM sources WHERE workspace_id = ?'),
@@ -132,6 +141,12 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
     mediaFile: db.prepare(`
       SELECT ${MEDIA_COLUMNS} FROM media_files m LEFT JOIN users u ON u.id = m.uploaded_by
       WHERE m.public_id = ? AND m.workspace_id = ?
+    `),
+    // Для оверлея: файл отдаётся, только пока его показывает хотя бы один видимый источник
+    mediaOnAir: db.prepare(`
+      SELECT m.public_id, m.mime, m.size_bytes FROM media_files m
+      WHERE m.public_id = ? AND m.workspace_id = ?
+        AND EXISTS (SELECT 1 FROM sources s WHERE s.media_id = m.id AND s.visible = 1)
     `),
     insertMedia: db.prepare(`
       INSERT INTO media_files (public_id, workspace_id, uploaded_by, kind, mime, size_bytes, width, height, name, created_at)
@@ -710,6 +725,58 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
     return { ...storage.locate(ws.publicId, file.public_id), mime: file.mime, size: file.size_bytes };
   }
 
+  /* ---------- Оверлей (по ссылке, без входа) ----------
+     Сюда попадает только то, без чего сцену не нарисовать. Скрытые источники,
+     названия источников и файлов, имена людей, пределы площадки и её номер
+     по ссылке оверлея не уходят. */
+
+  function enterOverlay({ token } = {}) {
+    return workspaces.enterOverlay({ token });
+  }
+
+  /* Настройки, которые сейчас ни на что не влияют, в эфир тоже не уходят: вместо них —
+     значения по умолчанию. Виджет, который показывает шкалу цели, хранит ещё и текст
+     бегущей строки, и код своего блока — заготовки на потом; пока они не на сцене,
+     по ссылке оверлея их не узнать. «Не влияет» — это то же условие, по которому поле
+     скрыто в панели свойств (when в описании поля). */
+  function onAirSettings(fields, settings) {
+    const result = {};
+    for (const [key, field] of Object.entries(fields)) {
+      result[key] = isShown(field, settings) ? settings[key] : field.default;
+    }
+    return result;
+  }
+
+  function overlaySourceView(row) {
+    const shown = sourceView(row);
+    // Название и защита от сдвига нужны только редактору
+    delete shown.name;
+    delete shown.locked;
+    const module = sourceType(row.type);
+    if (module) shown.settings = onAirSettings(module.fields, shown.settings);
+    return shown;
+  }
+
+  function overlayScene({ token } = {}) {
+    const ws = enterOverlay({ token });
+    const scene = sql.scene.get(ws.rowId);
+    return {
+      scene: { width: scene.scene_width, height: scene.scene_height, version: scene.scene_version },
+      sources: sql.visibleSources.all(ws.rowId).map(overlaySourceView), // снизу вверх
+      // Часы сервера: по ним оверлей считает таймеры — так же, как редактор
+      serverTime: now(),
+    };
+  }
+
+  /* Файл для оверлея. Отдаётся, только пока он в эфире: файл из библиотеки и файл
+     скрытого источника по ссылке оверлея получить нельзя, даже зная его номер. */
+  function openOverlayMedia({ token, fileId } = {}) {
+    const ws = enterOverlay({ token });
+    const file = isLinkToken(fileId, FILE_ID_LENGTH) ? sql.mediaOnAir.get(fileId, ws.rowId) : null;
+    if (!file) throw new AppError('media_not_found', 404);
+    return { ...storage.locate(ws.publicId, file.public_id), mime: file.mime, size: file.size_bytes };
+  }
+
   /* ---------- Служебное (не от имени человека) ---------- */
 
   // Площадку удалили: записи о файлах ушли вместе с ней, остаются сами файлы
@@ -746,6 +813,8 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
     upload,
     removeMedia,
     openMedia,
+    overlayScene,
+    openOverlayMedia,
     forgetWorkspace,
     cleanup,
     settle,

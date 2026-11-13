@@ -49,6 +49,11 @@ export function createWorkspacesHttp({ workspaces, realtime, auth }) {
     res.json({ ok: true, ...workspaces.revokeInvite({ ...from(req), inviteId: req.params.inviteId }) });
   });
 
+  // Новая ссылка оверлея: прежняя перестаёт работать сразу. Сама ссылка приходит вместе с площадкой (GET /:id)
+  workspacesRouter.post('/:id/overlay/renew', (req, res) => {
+    res.json({ ok: true, ...workspaces.renewOverlayLink(from(req)) });
+  });
+
   /* Одноразовый пропуск в живой канал площадки (см. ws/hub.js). Выдаётся только
      участнику и привязан к его входу: закрыли вход — пропуск и канал не действуют. */
   workspacesRouter.post('/:id/live', (req, res) => {

@@ -68,8 +68,17 @@ function buildTicker(body) {
     run.style.setProperty('--kf-ticker-from', `${width}px`);
     run.style.animationDuration = `${Math.max(1, (width + run.offsetWidth) / speed)}s`;
   };
-  // Когда догрузится шрифт, длина строки изменится — пересчитываем один раз
-  document.fonts?.ready.then(measure).catch(() => {});
+  /* Длина строки становится известна не сразу: шрифт догружается позже, а сцену могут
+     собрать ещё до того, как она появится на экране, — тогда длина равна нулю. Поэтому путь
+     пересчитывается каждый раз, когда длина меняется. Иначе строка в редакторе и в эфире
+     шла бы с разной скоростью. */
+  let watcher = null;
+  if (typeof ResizeObserver === 'function') {
+    watcher = new ResizeObserver(measure);
+    watcher.observe(run);
+  } else {
+    document.fonts?.ready.then(measure).catch(() => {});
+  }
 
   return {
     root,
@@ -78,6 +87,9 @@ function buildTicker(body) {
       speed = s.tickerSpeed;
       width = source.width;
       measure();
+    },
+    dispose() {
+      watcher?.disconnect();
     },
   };
 }

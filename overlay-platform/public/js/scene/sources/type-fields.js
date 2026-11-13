@@ -89,8 +89,14 @@ export function applyType(box, label, s) {
   t.letterSpacing = `${s.letterSpacing}px`;
   t.color = s.color;
   t.setProperty('--kf-shadow', s.shadow ? `0 ${s.shadowOffset}px ${s.shadowBlur}px ${s.shadowColor}` : 'none');
-  t.setProperty('--kf-stroke', `${s.strokeWidth * 2}px ${s.strokeColor}`);
-  t.setProperty('--kf-stroke-color', s.strokeColor);
+  // Цвет обводки нужен, только пока обводка есть: выключенное на вид надписи не влияет никак
+  if (s.strokeWidth > 0) {
+    t.setProperty('--kf-stroke', `${s.strokeWidth * 2}px ${s.strokeColor}`);
+    t.setProperty('--kf-stroke-color', s.strokeColor);
+  } else {
+    t.removeProperty('--kf-stroke');
+    t.removeProperty('--kf-stroke-color');
+  }
   label.classList.toggle('kf-stroked', s.strokeWidth > 0);
 }
 

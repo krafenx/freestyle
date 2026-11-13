@@ -4,11 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import zlib from 'node:zlib';
 import WebSocket from 'ws';
 import { createOverlayServer } from '../src/server/app.js';
 
 /* Общие помощники проверок: настоящий сервер на временной базе, «посетитель»
-   со своими cookie и запуск платформы отдельной программой. */
+   со своими cookie, площадка со сценой и запуск платформы отдельной программой. */
 
 export const PROJECT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const NODE_FLAGS = ['--no-warnings=ExperimentalWarning'];
@@ -27,9 +28,9 @@ export const NO_LIMITS = Object.fromEntries(
 
 /* Что должно быть у платформы к этому этапу: сколько обновлений структуры базы применено,
    как называется последнее и какой этап сообщает сервер. Меняется раз за этап — здесь. */
-export const SCHEMA_VERSION = 4;
-export const LATEST_MIGRATION = '004_scene';
-export const PLATFORM_STAGE = 5;
+export const SCHEMA_VERSION = 5;
+export const LATEST_MIGRATION = '005_overlay_link';
+export const PLATFORM_STAGE = 6;
 
 export const CODE_PATTERN = /^[A-HJKMNP-TV-Z2-9]{5}(?:-[A-HJKMNP-TV-Z2-9]{5}){3}$/;
 export const GOOD_PASSWORD = 'длинный надёжный пароль 42';
@@ -128,6 +129,104 @@ export async function registerUser(baseUrl, overrides = {}, visitorOptions = {})
   const res = await visitor.post('/api/auth/register', { username, password, ...overrides });
   assert.equal(res.status, 201, `регистрация ${username} не удалась: ${res.text}`);
   return { visitor, username, password, recoveryCode: res.data.recoveryCode, res };
+}
+
+/* ---------- Площадка, команда, сцена ----------
+   Нужны проверкам сцены (scene.test.js) и оверлея (overlay.test.js). */
+
+let workspaceCounter = 0;
+
+export async function createWorkspace(visitor, name = `Сцена ${(workspaceCounter += 1)}`) {
+  const res = await visitor.post('/api/workspaces', { name });
+  assert.equal(res.status, 201, `площадка «${name}» не создана: ${res.text}`);
+  return res.data.workspace;
+}
+
+export async function addModerator(baseUrl, owner, workspaceId, overrides = {}) {
+  const person = await registerUser(baseUrl, overrides);
+  const invite = await owner.post(`/api/workspaces/${workspaceId}/invites`, {});
+  assert.equal(invite.status, 201, `приглашение не создано: ${invite.text}`);
+  const accepted = await person.visitor.post(`/api/invites/${invite.data.token}/accept`);
+  assert.equal(accepted.status, 200, `приглашение не принято: ${accepted.text}`);
+  return person;
+}
+
+// Новый владелец со своей площадкой: у каждой проверки своя сцена и свой счёт команд
+export async function newStage(ctx, { displayName = 'Владелец', name } = {}) {
+  const owner = await registerUser(ctx.baseUrl, { displayName });
+  const workspace = await createWorkspace(owner.visitor, name);
+  return { owner, visitor: owner.visitor, workspace, id: workspace.id, api: `/api/workspaces/${workspace.id}/scene` };
+}
+
+export const sceneOf = async (visitor, workspaceId) => {
+  const res = await visitor.get(`/api/workspaces/${workspaceId}/scene`);
+  assert.equal(res.status, 200, `сцена не открылась: ${res.text}`);
+  return res.data;
+};
+
+export async function addSource(visitor, workspaceId, type, props) {
+  const res = await visitor.post(`/api/workspaces/${workspaceId}/scene/sources`, props === undefined ? { type } : { type, props });
+  assert.equal(res.status, 201, `источник «${type}» не создан: ${res.text}`);
+  return res.data.source;
+}
+
+export async function uploadFile(visitor, workspaceId, bytes, name = 'file.bin') {
+  const res = await visitor.upload(`/api/workspaces/${workspaceId}/scene/media`, bytes, { name });
+  assert.equal(res.status, 201, `файл «${name}» не загружен: ${res.text}`);
+  return res.data.file;
+}
+
+export const patchSource = (visitor, workspaceId, sourceId, patch) =>
+  visitor.patch(`/api/workspaces/${workspaceId}/scene/sources/${sourceId}`, patch);
+
+export const refusal = (res, status, error, extra = {}) => {
+  assert.equal(res.status, status, `ожидался отказ ${status} «${error}», пришло: ${res.status} ${res.text}`);
+  assert.deepEqual(res.data, { ok: false, error, ...extra });
+};
+
+/* Настоящая картинка PNG. Сервер решает, что это за файл, по его содержимому, поэтому
+   проверочные файлы собираются по байтам (остальные форматы — в scene.test.js). */
+export function pngChunk(type, data) {
+  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
+  const head = Buffer.alloc(4);
+  head.writeUInt32BE(data.length);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(zlib.crc32(body));
+  return Buffer.concat([head, body, crc]);
+}
+
+// Настоящая картинка PNG нужного размера: прозрачный прямоугольник
+export function png(width = 4, height = 3) {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(width, 0);
+  header.writeUInt32BE(height, 4);
+  header[8] = 8; // глубина цвета
+  header[9] = 6; // RGBA
+  const pixels = zlib.deflateSync(Buffer.alloc((width * 4 + 1) * height));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', header),
+    pngChunk('IDAT', pixels),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
+export async function waitFor(check, what, timeoutMs = 4000) {
+  const startedAt = Date.now();
+  for (;;) {
+    if (await check()) return;
+    if (Date.now() - startedAt > timeoutMs) assert.fail(`не дождались: ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 15));
+  }
+}
+
+// Ждать не дольше заданного: «зависло» должно быть провалом проверки, а не её вечным ожиданием
+export function within(promise, ms, what) {
+  let timer;
+  const late = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`Не дождались за ${ms} мс: ${what}`)), ms);
+  });
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
 }
 
 /* Подключение к живому каналу связи. next() — следующее сообщение сервера,

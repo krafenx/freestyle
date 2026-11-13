@@ -272,11 +272,12 @@ describe('Этап 4 — права: владелец, модератор, по�
     ['POST', `/api/workspaces/${id}/members/remove`, { username: moderator.username }],
     ['POST', `/api/workspaces/${id}/invites`, { label: 'чужое' }],
     ['POST', `/api/workspaces/${id}/invites/${inviteId}/revoke`, {}],
+    ['POST', `/api/workspaces/${id}/overlay/renew`, {}], // этап 6: новая ссылка оверлея
     ['POST', `/api/workspaces/${id}/live`, {}],
     ['POST', `/api/workspaces/${id}/leave`, {}],
   ];
 
-  // Состояние площадки целиком: после чужих попыток оно должно остаться прежним
+  // Состояние площадки целиком (вместе со ссылкой оверлея): после чужих попыток оно должно остаться прежним
   const state = () => JSON.stringify({
     workspaces: ctx.db.prepare('SELECT * FROM workspaces ORDER BY id').all(),
     members: ctx.db.prepare('SELECT * FROM workspace_members ORDER BY workspace_id, user_id').all(),
@@ -334,10 +335,12 @@ describe('Этап 4 — права: владелец, модератор, по�
     // Приглашения и пределы — дело владельца: модератору они не приходят вовсе
     assert.equal('invites' in seen.data, false);
     assert.equal('limits' in seen.data, false);
+    // Ссылка оверлея — тоже
+    assert.equal('overlay' in seen.data, false);
 
     const ownerOnly = actions(workspace.id, pending.invite.id)
       .filter(([method, url]) => method !== 'GET' && !url.endsWith('/leave') && !url.endsWith('/live'));
-    assert.equal(ownerOnly.length, 5);
+    assert.equal(ownerOnly.length, 6);
     for (const [method, url, body] of ownerOnly) {
       const res = await call(moderator.visitor, method, url, body);
       assert.equal(res.status, 403, `${method} ${url} от модератора`);

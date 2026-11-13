@@ -39,6 +39,12 @@ export function isLinkToken(value, length) {
   return typeof value === 'string' && value.length === length && LINK_TOKEN_PATTERN.test(value);
 }
 
+/* Ссылка оверлея: 32 знака — 160 бит. Длина намеренно не такая, как у приглашения
+   (26 знаков): одну ссылку нельзя принять за другую даже по ошибке. */
+export const OVERLAY_TOKEN_LENGTH = 32;
+export const newOverlayToken = () => newLinkToken(OVERLAY_TOKEN_LENGTH);
+export const isOverlayToken = (value) => isLinkToken(value, OVERLAY_TOKEN_LENGTH);
+
 /* Код восстановления: 20 символов группами по пять, без похожих друг на
    друга знаков (нет 0 и O, 1, I и L, U) — его придётся переписывать руками. */
 const RECOVERY_ALPHABET = 'ABCDEFGHJKMNPQRSTVWXYZ23456789';

@@ -1019,6 +1019,14 @@
   word-break: break-all;
 }
 
+/* Несколько кнопок под ссылкой — в ряд, на узком экране одна под другой */
+.code-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
 /* ---------- Окна поверх страницы ---------- */
 .modal {
   position: fixed;

@@ -1,0 +1,122 @@
+/* ==========================================================================
+   Страница оверлея — то, что открывает OBS (источник «Браузер»).
+
+   Только сцена на прозрачном фоне. Оформления платформы здесь нет намеренно:
+   ни зерна, ни дождя, ни шапки — всё, что нарисует эта страница, попадёт в эфир.
+   Как выглядят сами источники, описано в scene.css; здесь — только место под
+   сцену и вид вкладки проверки.
+
+   Как и в scene.css, свежих возможностей CSS здесь нет: встроенный браузер OBS
+   старше обычного.
+   ========================================================================== */
+
+html {
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+}
+
+body {
+  height: 100%;
+  margin: 0;
+  background: transparent;
+}
+
+/* Место под сцену: в OBS — всё окно источника */
+.overlay-fit {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+}
+
+/* Сама сцена. Размер ей задаёт js/scene/view.js, масштаб и место в окне —
+   js/pages/overlay.js. Пока сцена не собрана и шрифты не догружены, её не видно:
+   в эфир не попадает ни полусобранная сцена, ни надпись запасным шрифтом */
+.overlay-fit .overlay-stage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+}
+
+html.overlay-ready .overlay-fit .overlay-stage {
+  visibility: visible;
+}
+
+.overlay-bar,
+.overlay-bounds {
+  display: none;
+}
+
+/* ---------- Вкладка проверки ----------
+   В обычной вкладке браузера прозрачный фон выглядит белым, и светлая надпись на нём
+   не видна. Поэтому для проверки сцена лежит на тёмной подложке «в клетку», а сверху
+   написано, что происходит. В OBS ничего этого нет. */
+html.overlay-check {
+  background: #08080b;
+}
+
+html.overlay-check .overlay-bar {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding: 10px 16px 11px;
+  font-family: "Manrope", Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #8f8f96;
+  background: #0c0c10;
+  border-bottom: 1px solid rgba(160, 160, 160, 0.16);
+}
+
+html.overlay-check .overlay-bar[hidden] {
+  display: none;
+}
+
+.overlay-bar-title {
+  margin-right: 16px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #ff7a7a;
+}
+
+.overlay-bar-status {
+  margin-right: 16px;
+  color: #f2f2f2;
+}
+
+.overlay-bar-status.warn {
+  color: #fecaca;
+}
+
+.overlay-bar-hint {
+  margin-left: auto;
+}
+
+html.overlay-check .overlay-bounds {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  background-color: #15151a;
+  background-image:
+    linear-gradient(45deg, #1d1d24 25%, transparent 25%, transparent 75%, #1d1d24 75%),
+    linear-gradient(45deg, #1d1d24 25%, transparent 25%, transparent 75%, #1d1d24 75%);
+  background-position: 0 0, 12px 12px;
+  background-size: 24px 24px;
+  outline: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+html.overlay-check .overlay-bounds[hidden] {
+  display: none;
+}

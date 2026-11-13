@@ -4,7 +4,6 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import zlib from 'node:zlib';
 import { createServerClock } from '../public/js/scene/clock.js';
 import { FIELD_KINDS, checkValue, defaultsOf, isShown, readSettings } from '../public/js/scene/schema.js';
 import { ACCEPTED_FORMATS, ACCEPT_ATTRIBUTE, HEAD_BYTES, formatName, readJpegSize, sniffFile } from '../public/js/scene/sniff.js';
@@ -20,7 +19,8 @@ import { openDatabase } from '../src/server/db/database.js';
 import { DEFAULT_SCENE_LIMITS } from '../src/server/scene/scene.js';
 import {
   FAST, GOOD_PASSWORD, LATEST_MIGRATION, MINUTE, PLATFORM_STAGE, PROJECT_DIR, SCHEMA_VERSION,
-  createVisitor, openSocket, registerUser, startServer,
+  addModerator, addSource, createVisitor, createWorkspace, newStage, openSocket, patchSource, png, pngChunk,
+  refusal, registerUser, sceneOf, startServer, uploadFile, waitFor, within,
 } from './helpers.js';
 
 /* Этап 5: сцена и редактор. Проверяется настоящий сервер с настоящей базой и
@@ -36,32 +36,8 @@ const SEVEN_TYPES = ['text', 'image', 'gif', 'video', 'shape', 'timer', 'widget'
 
 /* ---------- Файлы для загрузки ----------
    Сервер решает, что это за файл, по его содержимому. Поэтому проверочные файлы
-   собираются по байтам: настоящие заголовки настоящих форматов. */
-
-function pngChunk(type, data) {
-  const body = Buffer.concat([Buffer.from(type, 'latin1'), data]);
-  const head = Buffer.alloc(4);
-  head.writeUInt32BE(data.length);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(zlib.crc32(body));
-  return Buffer.concat([head, body, crc]);
-}
-
-// Настоящая картинка PNG нужного размера: прозрачный прямоугольник
-function png(width = 4, height = 3) {
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(width, 0);
-  header.writeUInt32BE(height, 4);
-  header[8] = 8; // глубина цвета
-  header[9] = 6; // RGBA
-  const pixels = zlib.deflateSync(Buffer.alloc((width * 4 + 1) * height));
-  return Buffer.concat([
-    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
-    pngChunk('IHDR', header),
-    pngChunk('IDAT', pixels),
-    pngChunk('IEND', Buffer.alloc(0)),
-  ]);
-}
+   собираются по байтам: настоящие заголовки настоящих форматов. Картинка PNG нужна
+   и проверкам оверлея — она лежит в helpers.js. */
 
 // JPEG: начало файла и блок с размерами. frame: false — блока с размерами нет
 function jpeg(width = 6, height = 5, { frame = true } = {}) {
@@ -170,57 +146,8 @@ const sized = (bytes, size) => {
   return Buffer.concat([bytes, Buffer.alloc(size - bytes.length)]);
 };
 
-/* ---------- Площадка, команда, сцена ---------- */
-
-let workspaceCounter = 0;
-
-async function createWorkspace(visitor, name = `Сцена ${(workspaceCounter += 1)}`) {
-  const res = await visitor.post('/api/workspaces', { name });
-  assert.equal(res.status, 201, `площадка «${name}» не создана: ${res.text}`);
-  return res.data.workspace;
-}
-
-async function addModerator(baseUrl, owner, workspaceId, overrides = {}) {
-  const person = await registerUser(baseUrl, overrides);
-  const invite = await owner.post(`/api/workspaces/${workspaceId}/invites`, {});
-  assert.equal(invite.status, 201, `приглашение не создано: ${invite.text}`);
-  const accepted = await person.visitor.post(`/api/invites/${invite.data.token}/accept`);
-  assert.equal(accepted.status, 200, `приглашение не принято: ${accepted.text}`);
-  return person;
-}
-
-// Новый владелец со своей площадкой: у каждой проверки своя сцена и свой счёт команд
-async function newStage(ctx, { displayName = 'Владелец', name } = {}) {
-  const owner = await registerUser(ctx.baseUrl, { displayName });
-  const workspace = await createWorkspace(owner.visitor, name);
-  return { owner, visitor: owner.visitor, workspace, id: workspace.id, api: `/api/workspaces/${workspace.id}/scene` };
-}
-
-const sceneOf = async (visitor, workspaceId) => {
-  const res = await visitor.get(`/api/workspaces/${workspaceId}/scene`);
-  assert.equal(res.status, 200, `сцена не открылась: ${res.text}`);
-  return res.data;
-};
-
-async function addSource(visitor, workspaceId, type, props) {
-  const res = await visitor.post(`/api/workspaces/${workspaceId}/scene/sources`, props === undefined ? { type } : { type, props });
-  assert.equal(res.status, 201, `источник «${type}» не создан: ${res.text}`);
-  return res.data.source;
-}
-
-async function uploadFile(visitor, workspaceId, bytes, name = 'file.bin') {
-  const res = await visitor.upload(`/api/workspaces/${workspaceId}/scene/media`, bytes, { name });
-  assert.equal(res.status, 201, `файл «${name}» не загружен: ${res.text}`);
-  return res.data.file;
-}
-
-const patchSource = (visitor, workspaceId, sourceId, patch) =>
-  visitor.patch(`/api/workspaces/${workspaceId}/scene/sources/${sourceId}`, patch);
-
-const refusal = (res, status, error, extra = {}) => {
-  assert.equal(res.status, status, `ожидался отказ ${status} «${error}», пришло: ${res.status} ${res.text}`);
-  assert.deepEqual(res.data, { ok: false, error, ...extra });
-};
+/* ---------- Площадка, команда, сцена ----------
+   Создание площадки, источников и файлов — в helpers.js: оно нужно и проверкам оверлея. */
 
 const call = (visitor, method, url, body) => {
   if (method === 'GET') return visitor.get(url);
@@ -257,24 +184,6 @@ const sceneState = (ctx) => JSON.stringify({
   media: ctx.db.prepare('SELECT * FROM media_files ORDER BY id').all(),
   disk: filesOnDisk(uploadsDir(ctx)),
 });
-
-async function waitFor(check, what, timeoutMs = 4000) {
-  const startedAt = Date.now();
-  for (;;) {
-    if (await check()) return;
-    if (Date.now() - startedAt > timeoutMs) assert.fail(`не дождались: ${what}`);
-    await new Promise((resolve) => setTimeout(resolve, 15));
-  }
-}
-
-// Ждать не дольше заданного: «зависло» должно быть провалом проверки, а не её вечным ожиданием
-function within(promise, ms, what) {
-  let timer;
-  const late = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`Не дождались за ${ms} мс: ${what}`)), ms);
-  });
-  return Promise.race([promise, late]).finally(() => clearTimeout(timer));
-}
 
 /* Загрузка «по частям», как её ведёт браузер при медленной связи: размер заранее
    не объявлен, а между частями можно сделать паузу или оборвать соединение. */
@@ -1193,7 +1102,7 @@ describe('Этап 5 — права: владелец, модератор, по�
     const exported = rules.slice(rules.lastIndexOf('\n  return {')).match(/\b[a-zA-Z]+\b(?=,|\n)/g).filter((name) => name !== 'return');
     assert.deepEqual(exported, [
       'get', 'createSource', 'updateSource', 'removeSource', 'duplicateSource', 'moveSource', 'commandSource',
-      'upload', 'removeMedia', 'openMedia', 'forgetWorkspace', 'cleanup', 'settle', 'uploadIdleMs',
+      'upload', 'removeMedia', 'openMedia', 'overlayScene', 'openOverlayMedia', 'forgetWorkspace', 'cleanup', 'settle', 'uploadIdleMs',
     ]);
     for (const name of exported.slice(0, 10)) {
       const opening = new RegExp(
@@ -1206,6 +1115,18 @@ describe('Этап 5 — права: владелец, модератор, по�
     assert.doesNotMatch(rules, /workspace_members|owner_id|role\s*[!=]==|'owner'|'moderator'/);
     // Загрузка длится долго: перед сохранением права проверяются ещё раз
     assert.match(rules, /const again = enter\(\{ userId, workspaceId \}\);/);
+
+    /* С этапа 6 у сцены есть второй вход — для оверлея: не человек, а ссылка оверлея.
+       Правило то же: оба действия оверлея первой строкой входят в площадку, а действует ли
+       ссылка, решают площадки. Что именно видно по ссылке, проверяется в overlay.test.js. */
+    for (const name of ['overlayScene', 'openOverlayMedia']) {
+      const opening = new RegExp(`\\n  function ${name}\\(\\{ token[^)]*\\} = \\{\\}\\) \\{\\n    const ws = enterOverlay\\(\\{ token \\}\\);`);
+      assert.match(rules, opening, `${name}: действие оверлея не начинается со входа по ссылке`);
+    }
+    assert.match(rules, /function enterOverlay\(\{ token \} = \{\}\) \{\n    return workspaces\.enterOverlay\(\{ token \}\);\n  \}/);
+    // По ссылке оверлея сцену только читают: кроме этих двух действий, по ней не входит ни одно
+    // (три упоминания — сам вход и два действия)
+    assert.equal(rules.match(/enterOverlay\(\{ token \}\)/g).length, 3);
   });
 });
 
@@ -2715,7 +2636,7 @@ describe('Этап 5 — страницы, тексты и защита стра
     const shell = read('js/pages/shell.js');
     assert.match(shell, /const address = `\/app\/w\/\$\{encodeURIComponent\(workspace\.id\)\}`;/);
     assert.match(shell, /el\('a', 'btn-primary sm', 'Редактор сцены'\);\n\s+editor\.href = `\$\{address\}\/editor`;/);
-    assert.match(shell, /el\('a', 'btn-action', 'Команда'\);\n\s+teamPage\.href = address;/);
+    assert.match(shell, /el\('a', 'btn-action', isOwner \? 'OBS и команда' : 'Команда'\);\n\s+teamPage\.href = address;/);
     // Редактор: ссылка «к площадке»
     assert.match(read('editor.html'), /id="back-link"/);
     assert.match(read('js/pages/editor.js'), /\$\('back-link'\)\.setAttribute\('href', `\/app\/w\/\$\{encodeURIComponent\(workspaceId\)\}`\);/);
@@ -2725,8 +2646,7 @@ describe('Этап 5 — страницы, тексты и защита стра
       const html = read(page);
       assert.doesNotMatch(html, /этап(?:е|а)? 4|4 \/ 9|4 из 9|будущ\S* редактор|с появлением редактора|каркас\S* редактора/i, page);
     }
-    assert.match(read('index.html'), /этап 5 из 9/);
-    assert.match(read('app.html'), /5 \/ 9/);
+    // Какой этап страницы называют текущим — проверяется вместе с последним этапом (overlay.test.js)
     // Заготовки «скелета редактора» из прошлых этапов в кабинете больше нет
     assert.doesNotMatch(read('app.html'), /tab-editor|pane-editor|studio-skeleton|stage-placeholder/);
     for (const sheet of fs.readdirSync(path.join(publicDir, 'styles'))) {

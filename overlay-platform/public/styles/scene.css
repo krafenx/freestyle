@@ -4,32 +4,79 @@
    что в эфире сцена выглядит так же, как в редакторе.
 
    Здесь намеренно нет свежих возможностей CSS: встроенный браузер OBS старше
-   обычного, и то, чего он не знает, в эфире просто не сработало бы.
+   обычного (Chromium 95 в OBS 27.2, Chromium 103 в OBS 28–30), и то, чего он
+   не знает, в эфире просто не сработало бы.
    ========================================================================== */
 
+/* Сцена не зависит от страницы, на которой стоит. Редактор и оверлей — разные страницы
+   с разным оформлением: у кабинета свой шрифт, цвет текста и межстрочный интервал,
+   у оверлея нет ничего. Поэтому всё, что источники могли бы унаследовать от страницы,
+   задано здесь явно — одинаково для обеих. Без этого надпись без собственного цвета
+   была бы в редакторе светлой, а в эфире чёрной. Язык страницы (lang="ru") наследуется
+   как обычно: он одинаков у обеих страниц.
+   Размеры сцены задаёт js/scene/view.js, масштаб под окно — страница. */
 .kf-scene {
+  display: block;
   position: relative;
   overflow: hidden;
+  box-sizing: border-box;
   transform-origin: 0 0;
-  /* Размеры задаёт js/scene/view.js, масштаб под окно — страница */
+
+  color: #f5f5f5;
+  color-scheme: dark;
+  direction: ltr;
+  font-family: "Manrope", Arial, sans-serif;
+  font-feature-settings: normal;
+  font-kerning: auto;
+  font-size: 14px;
+  font-stretch: normal;
+  font-style: normal;
+  font-variant: normal;
+  font-weight: 400;
+  -webkit-hyphens: manual;
+  hyphens: manual;
+  letter-spacing: normal;
+  line-height: 1.55;
+  overflow-wrap: normal;
+  tab-size: 8;
+  text-align: start;
+  text-indent: 0;
+  text-rendering: auto;
+  text-shadow: none;
+  text-transform: none;
+  white-space: normal;
+  word-break: normal;
+  word-spacing: normal;
+  writing-mode: horizontal-tb;
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-fill-color: currentColor;
+  -webkit-text-size-adjust: 100%;
+  -webkit-text-stroke: 0 currentColor;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* То же для отступов: у кабинета они обнулены для всех элементов разом, у оверлея — нет.
+   Правило стоит в начале файла: всё, что ниже задаёт свои отступы, его перекрывает */
+.kf-src,
+.kf-src *,
+.kf-src *::before,
+.kf-src *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 /* Рамка источника. На сцене ничего не нажимается: в редакторе выбор и перетаскивание
    обрабатывает слой поверх сцены, а в эфире нажимать некому */
 .kf-src {
   position: absolute;
-  box-sizing: border-box;
   pointer-events: none;
 }
 
-.kf-src[hidden] {
-  display: none;
-}
-
-.kf-src *,
-.kf-src *::before,
-.kf-src *::after {
-  box-sizing: border-box;
+/* Скрытое скрыто — какое бы оформление ни было у самого элемента */
+.kf-scene [hidden] {
+  display: none !important;
 }
 
 .kf-src-body {

@@ -72,12 +72,12 @@
         </button>
         <button class="sidebar-link" type="button" role="tab" id="tab-plan" aria-selected="false" aria-controls="pane-plan" tabindex="-1">
           <span>План работ</span>
-          <span class="mono">5 / 9</span>
+          <span class="mono">6 / 9</span>
         </button>
       </div>
 
       <div class="notice-box">
-        Редактор сцены открывается с карточки площадки. Ссылка для OBS появится на <strong>этапе 6</strong>.
+        Редактор сцены открывается с карточки площадки. <strong>Ссылка для OBS</strong> — на странице площадки; её видит владелец.
       </div>
 
       <button class="btn-action" type="button" data-atmo-toggle aria-pressed="false">
@@ -94,7 +94,8 @@
           <p class="sec-sub" style="margin-top: 10px; max-width: 680px;">
             Площадка — это одна сцена оверлея и команда, которая ею управляет. Создайте свою
             или примите приглашение от другого стримера: его площадка появится здесь же.
-            Сцену собирают в редакторе — он открывается с карточки площадки.
+            Сцену собирают в редакторе — он открывается с карточки площадки, — а в эфир она
+            попадает по ссылке для OBS.
           </p>
           <div class="form-actions" style="margin-top: 20px;">
             <button class="btn-primary sm" type="button" id="workspace-new-btn" data-open-modal="modal-workspace-new" disabled>Создать площадку</button>
@@ -219,12 +220,12 @@
       <!-- Раздел 3: план работ с честными статусами -->
       <section id="pane-plan" role="tabpanel" aria-labelledby="tab-plan" class="stack" style="gap: 20px;" hidden>
         <div class="glass pad-card">
-          <div class="sec-eyebrow" style="margin-bottom: 12px;">этап 5 из 9 завершён</div>
+          <div class="sec-eyebrow" style="margin-bottom: 12px;">этап 6 из 9 завершён</div>
           <h1 class="pane-title">План работ</h1>
           <p class="sec-sub" style="margin-top: 10px; max-width: 680px;">
-            Готовы основа, вход, площадки и редактор сцены: источники семи типов, слои, файлы
-            и сохранение каждой правки на сервере. В OBS сцена попадёт на следующем этапе.
-            Ниже — что уже сделано и что на очереди.
+            Готовы основа, вход, площадки, редактор сцены и оверлей для OBS: у каждой площадки
+            своя ссылка, по которой сцена открывается на прозрачном фоне и сама следует за правками.
+            Дальше — передача правок без задержки. Ниже — что уже сделано и что на очереди.
           </p>
         </div>
 
@@ -274,19 +275,19 @@
             <p class="stage-card-text">Сцена, семь типов источников, слои, перемещение, размеры, свойства, файлы.</p>
           </div>
 
-          <div class="glass pad-card-sm" style="border-color: rgba(163, 19, 19, 0.45);">
+          <div class="glass pad-card-sm">
             <div class="row between">
-              <span class="card-label mono" style="color: var(--crimson-light);">этап 06</span>
-              <span class="status-badge crimson"><span class="dot"></span>следующий</span>
+              <span class="card-label mono">этап 06</span>
+              <span class="status-badge ok"><span class="dot"></span>готово</span>
             </div>
             <div class="stage-card-title">Оверлей для OBS</div>
             <p class="stage-card-text">Ссылка площадки, прозрачный фон, точное отображение сцены.</p>
           </div>
 
-          <div class="glass pad-card-sm">
+          <div class="glass pad-card-sm" style="border-color: rgba(163, 19, 19, 0.45);">
             <div class="row between">
-              <span class="card-label mono">этап 07</span>
-              <span class="status-badge muted">в очереди</span>
+              <span class="card-label mono" style="color: var(--crimson-light);">этап 07</span>
+              <span class="status-badge crimson"><span class="dot"></span>следующий</span>
             </div>
             <div class="stage-card-title">Синхронизация</div>
             <p class="stage-card-text">Мгновенная передача правок в OBS и между модераторами.</p>

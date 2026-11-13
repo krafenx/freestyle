@@ -46,8 +46,11 @@ export async function apiFetch(path, options = {}) {
    Каналу площадки нужен одноразовый пропуск. Его добывает функция ticket —
    обычным запросом, где сервер проверяет вход и права. Она возвращает
    { ticket } — пропуск получен, { denied: true } — доступа нет (тогда канал
-   больше не подключается), а всё остальное значит «попробовать позже». */
-export function connectRealtime({ channel = 'system', ticket, onMessage, onStatus } = {}) {
+   больше не подключается), а всё остальное значит «попробовать позже».
+
+   Каналу оверлея вместо пропуска нужен ключ — ссылка оверлея (key): страница
+   в OBS не входит в аккаунт, и получить пропуск ей не на что. */
+export function connectRealtime({ channel = 'system', ticket, key, onMessage, onStatus } = {}) {
   let ws = null;
   let stopped = false;
   let waitingTicket = false;
@@ -60,6 +63,7 @@ export function connectRealtime({ channel = 'system', ticket, onMessage, onStatu
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const params = new URLSearchParams({ channel });
     if (pass) params.set('ticket', pass);
+    if (key) params.set('key', key);
     return `${proto}//${window.location.host}/ws?${params.toString()}`;
   }
 

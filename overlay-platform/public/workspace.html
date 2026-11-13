@@ -74,7 +74,8 @@
       </div>
 
       <div class="notice-box" id="ws-note">
-        Сцену пока видно только в редакторе. Ссылка для OBS появится на <strong>этапе 6</strong>.
+        Сцена попадает в эфир по <strong>ссылке для OBS</strong>. Всё, что сохранено в редакторе,
+        появляется в оверлее само.
       </div>
 
       <button class="btn-action" type="button" data-atmo-toggle aria-pressed="false">
@@ -115,12 +116,59 @@
           </div>
           <p class="settings-text">
             У площадки одна сцена. В редакторе на неё ставят текст, картинки, GIF, видео, фигуры,
-            таймеры и виджеты; каждая правка сохраняется сразу и видна всей команде.
+            таймеры и виджеты; каждая правка сохраняется сразу и видна всей команде и в оверлее.
           </p>
           <div class="form-actions">
             <!-- Адрес подставляет workspace.js: страница одна на все площадки -->
             <a class="btn-primary sm" id="editor-link" href="/app">Открыть редактор</a>
           </div>
+        </section>
+
+        <!-- Оверлей: ссылка, по которой сцену открывает OBS. Саму ссылку сервер присылает
+             только владельцу; в разметке страницы её нет -->
+        <section class="glass pad-card" id="overlay-card" aria-labelledby="overlay-title">
+          <div class="row between top">
+            <div>
+              <div class="card-label">оверлей</div>
+              <h2 class="settings-title" id="overlay-title">Ссылка для OBS</h2>
+            </div>
+            <span class="status-badge muted" id="overlay-issued" hidden></span>
+          </div>
+
+          <!-- Владельцу: сама ссылка -->
+          <div id="overlay-owner" hidden>
+            <p class="settings-text">
+              По этой ссылке открывается только сцена на прозрачном фоне — без кнопок и панелей.
+              В OBS добавьте источник «Браузер», вставьте в него ссылку и задайте размер
+              <span class="mono">1920&nbsp;×&nbsp;1080</span>. Больше в OBS ничего настраивать не нужно:
+              правки из редактора появляются в эфире сами.
+            </p>
+            <div class="code-box">
+              <div class="code-value link-value" id="overlay-link-value"></div>
+              <div class="code-actions">
+                <button class="btn-ghost sm" type="button" id="overlay-reveal" aria-pressed="false">Показать</button>
+                <button class="btn-ghost sm" type="button" id="overlay-copy">Скопировать</button>
+              </div>
+            </div>
+            <div class="field-hint">
+              Ссылка прикрыта, чтобы не попасть в эфир вместе с этой страницей: открывайте её,
+              только когда экран не в кадре. Скопировать можно и не открывая.
+            </div>
+            <div class="form-actions">
+              <button class="btn-action" type="button" id="overlay-check">Проверить в браузере</button>
+              <button class="btn-ghost sm danger" type="button" id="overlay-renew">Выпустить новую ссылку…</button>
+            </div>
+            <div class="notice-box form-alert">
+              Ссылка — секрет: по ней сцену увидит любой, у кого она окажется. Если ссылка попала
+              к посторонним, выпустите новую — прежняя сразу перестанет работать.
+            </div>
+          </div>
+
+          <!-- Модератору: как сцена попадает в эфир -->
+          <p class="settings-text" id="overlay-moderator" hidden>
+            Сцена попадает в эфир по ссылке, которую владелец площадки вставляет в OBS. Ссылку видит
+            и выпускает только он. Всё, что вы сохраняете в редакторе, появляется в оверлее само.
+          </p>
         </section>
 
         <!-- Команда -->

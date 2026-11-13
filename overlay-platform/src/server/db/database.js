@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { newOverlayToken } from '../auth/tokens.js';
 
 const MIGRATIONS = [
   {
@@ -177,6 +178,37 @@ const MIGRATIONS = [
       WHERE key = 'platform_stage';
     `,
   },
+  {
+    /* Ссылка оверлея — адрес, по которому сцену открывает OBS.
+
+       У площадки ровно одна действующая ссылка, поэтому она лежит в самой площадке.
+       Хранится как есть, а не отпечатком: владельцу нужно видеть её снова — в другом
+       OBS, на втором компьютере, после переустановки. По ссылке можно только смотреть
+       сцену, а владелец в любой момент выпускает новую — прежняя перестаёт работать.
+       Рядом записано, когда ссылку выпустили.
+
+       Площадки, созданные до этого этапа, получают ссылку здесь же (см. after):
+       после обновления ссылка есть у каждой площадки. */
+    version: 5,
+    name: '005_overlay_link',
+    sql: `
+      ALTER TABLE workspaces ADD COLUMN overlay_token TEXT;
+      ALTER TABLE workspaces ADD COLUMN overlay_token_at INTEGER;
+
+      CREATE UNIQUE INDEX workspaces_overlay_token_idx ON workspaces (overlay_token);
+
+      UPDATE system_settings
+      SET value = '6', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE key = 'platform_stage';
+    `,
+    // Случайные значения берутся у системы (crypto), а не у базы — как и все остальные ссылки
+    after(db) {
+      const pending = db.prepare('SELECT id FROM workspaces WHERE overlay_token IS NULL ORDER BY id').all();
+      const assign = db.prepare('UPDATE workspaces SET overlay_token = ?, overlay_token_at = ? WHERE id = ?');
+      const time = Date.now();
+      for (const row of pending) assign.run(newOverlayToken(), time, row.id);
+    },
+  },
 ];
 
 /* Несколько изменений как одно целое: либо применяются все, либо ни одного.
@@ -227,8 +259,10 @@ export function openDatabase(dbPath, { upToVersion = Infinity } = {}) {
     if (migration.version > upToVersion) break;
     const exists = hasMigrationStmt.get(migration.version);
     if (!exists) {
+      // Изменение структуры, заполнение новых столбцов и отметка о нём — одно целое
       inTransaction(db, () => {
         db.exec(migration.sql);
+        migration.after?.(db);
         recordMigrationStmt.run(migration.version, migration.name);
       });
     }

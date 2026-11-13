@@ -71,7 +71,7 @@
       <div>
         <div class="hero-status-row">
           <span class="status-badge muted" id="hero-health-badge"><span class="dot"></span>проверяю сервер…</span>
-          <span class="status-badge crimson">этап 5 из 9 · редактор</span>
+          <span class="status-badge crimson">этап 6 из 9 · оверлей для OBS</span>
         </div>
         <div class="hero-eyebrow">browser source · live sync · moderators</div>
         <h1 class="hero-display">kra<span class="grad">fen</span> studio</h1>
@@ -98,7 +98,7 @@
         <p class="sec-sub">
           Три показателя ниже приходят с настоящего сервера прямо сейчас — это не картинка
           и не заготовка. На этом фундаменте уже работают вход в аккаунт, площадки с командой
-          модераторов и редактор сцены; дальше — сам оверлей для OBS.
+          модераторов, редактор сцены и оверлей для OBS; дальше — передача правок без задержки.
         </p>
       </div>
 
@@ -122,7 +122,7 @@
             <span class="status-badge muted" id="ws-badge"><span class="dot"></span>подключение</span>
           </div>
           <div class="stat-value mono" id="ws-rtt-val">— мс</div>
-          <p class="stat-note">По этому каналу открытые редакторы узнают о правках друг друга. Позже так же их получит OBS.</p>
+          <p class="stat-note">По этому каналу открытые редакторы и оверлей в OBS узнают, что сцену изменили.</p>
           <div class="row between divided">
             <span class="kv-inline">Открыто окон: <strong id="ws-clients-val">0</strong></span>
             <button class="btn-action" type="button" id="ws-ping-btn" aria-label="Замерить задержку заново">Замерить</button>
@@ -424,7 +424,7 @@
     <div class="modal-box">
       <div class="modal-head">
         <div>
-          <div class="modal-eyebrow">как это будет устроено</div>
+          <div class="modal-eyebrow">как это устроено</div>
           <h3 class="modal-title" id="modal-obs-title">Как площадка работает с OBS</h3>
         </div>
         <button class="icon-btn" type="button" data-close-modal="modal-obs-flow" aria-label="Закрыть">
@@ -437,21 +437,22 @@
           <div class="card-label" style="color: var(--crimson-light);">1 · ссылка площадки</div>
           <p class="stat-note">
             У каждой площадки своя ссылка на оверлей. По ней открывается только сцена
-            на прозрачном фоне — без кнопок, панелей и кабинета.
+            на прозрачном фоне — без кнопок, панелей и кабинета. Ссылку видит владелец
+            на странице площадки.
           </p>
         </div>
         <div class="inner-box">
           <div class="card-label" style="color: var(--crimson-light);">2 · источник «Браузер» в OBS</div>
           <p class="stat-note">
-            Стример один раз вставляет ссылку в OBS как Browser Source. Больше в OBS ничего
-            настраивать не нужно.
+            Стример один раз вставляет ссылку в OBS как источник «Браузер» размером
+            1920 × 1080. Больше в OBS ничего настраивать не нужно.
           </p>
         </div>
         <div class="inner-box">
           <div class="card-label" style="color: var(--crimson-light);">3 · правки вживую</div>
           <p class="stat-note">
             Владелец и модераторы двигают объекты, меняют текст, картинки и таймеры в редакторе —
-            изменения сохраняются и сразу появляются в эфире, без перезагрузки страницы.
+            изменения сохраняются и появляются в эфире сами, без перезагрузки страницы.
           </p>
         </div>
       </div>

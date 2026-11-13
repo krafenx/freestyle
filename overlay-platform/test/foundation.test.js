@@ -104,16 +104,25 @@ describe('Этап 2 — основа платформы', () => {
 
     const pages = listPublicFiles(publicDir, /\.html$/);
     assert.ok(pages.length >= 6, 'ожидались главная, кабинет, вход, регистрация, восстановление и «не найдено»');
+    /* Одно исключение — страница оверлея для OBS: на ней нет ничего, кроме сцены,
+       потому что всё нарисованное попадает в эфир. Это проверяется в overlay.test.js. */
+    const bare = new Set(['overlay.html']);
+    let exceptions = 0;
     for (const file of pages) {
       const html = fs.readFileSync(file, 'utf8');
       const name = path.relative(publicDir, file);
+      assert.match(html, /<html lang="ru">/, `${name}: страница должна быть помечена как русскоязычная`);
+      if (bare.has(name)) {
+        exceptions += 1;
+        continue;
+      }
       assert.match(html, /<div class="grain"/, `${name}: нет слоя зернистости`);
       assert.match(html, /id="glow"/, `${name}: нет фонового свечения`);
       assert.match(html, /<canvas id="rain"/, `${name}: нет слоя дождя`);
       assert.match(html, /class="vignette"/, `${name}: нет виньетки`);
       assert.match(html, /kra<em>fen<\/em>/, `${name}: нет фирменного знака`);
-      assert.match(html, /<html lang="ru">/, `${name}: страница должна быть помечена как русскоязычная`);
     }
+    assert.equal(exceptions, bare.size, 'страница-исключение переименована или удалена — список исключений нужно обновить');
   });
 
   it('несуществующая страница показывает «не найдено», а не подменяется главной', async () => {

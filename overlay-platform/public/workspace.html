@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <title>Площадка — krafen studio</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/styles/fonts.css">
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/atmosphere.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <link rel="stylesheet" href="/styles/layout.css">
+  <script type="module" src="/js/pages/workspace.js"></script>
+</head>
+<!-- Страница одна на все площадки: в самой разметке нет ни названия, ни команды.
+     Всё это приходит запросом, где сервер проверяет, кем человек приходится площадке. -->
+<body class="studio calm">
+  <div id="glow" aria-hidden="true"></div>
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <div class="fog" aria-hidden="true"></div>
+  <div id="flash" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <nav class="topnav" aria-label="Верхняя панель">
+    <a class="brand" href="/" aria-label="krafen studio — на главную">
+      <span class="brand-word">kra<em>fen</em></span>
+      <span class="brand-tag">workspace</span>
+    </a>
+    <div class="topnav-links">
+      <a href="/">Главная</a>
+      <a class="active" href="/app">Рабочая среда</a>
+    </div>
+    <div class="topnav-right">
+      <span class="status-badge muted" id="live-status"><span class="dot"></span>связь…</span>
+      <span class="user-chip hide-compact" id="user-chip" hidden>
+        <span class="avatar" id="user-chip-letter" aria-hidden="true"></span>
+        <span class="name" id="user-chip-name"></span>
+      </span>
+      <button class="btn-action hide-compact" type="button" data-logout>Выйти</button>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav">Меню</button>
+    </div>
+  </nav>
+
+  <nav class="mobile-nav" id="mobile-nav" aria-label="Меню">
+    <button class="mobile-nav-close" type="button" aria-label="Закрыть меню">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+    <a href="/">Главная</a>
+    <a class="active" href="/app">Рабочая среда</a>
+    <button class="btn-ghost" type="button" data-logout>Выйти из аккаунта</button>
+  </nav>
+
+  <div class="workspace-layout">
+    <!-- Боковая панель: что это за площадка и кем вы ей приходитесь -->
+    <aside class="glass workspace-sidebar">
+      <a class="back-link" href="/app">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+        <span>Все площадки</span>
+      </a>
+
+      <div>
+        <div class="card-label">площадка</div>
+        <h1 class="sidebar-title" id="ws-name">Загрузка…</h1>
+      </div>
+
+      <div class="stack" id="ws-facts" hidden>
+        <div class="kv-row"><span>Ваша роль</span><span class="status-badge muted" id="ws-role"></span></div>
+        <div class="kv-row"><span>Владелец</span><span class="kv-text" id="ws-owner"></span></div>
+        <div class="kv-row"><span>Создана</span><span class="kv-text" id="ws-created"></span></div>
+        <div class="kv-row"><span>Модераторов</span><span class="kv-text" id="ws-moderators"></span></div>
+      </div>
+
+      <div class="notice-box" id="ws-note">
+        Сцена появится у площадки на <strong>этапе 5</strong>, ссылка для OBS — на этапе 6.
+      </div>
+
+      <button class="btn-action" type="button" data-atmo-toggle aria-pressed="false">
+        <span data-atmo-label data-on="Дождь на фоне: вкл" data-off="Дождь на фоне: выкл">Дождь на фоне: выкл</span>
+      </button>
+    </aside>
+
+    <main class="workspace-main">
+      <!-- Пока данные не пришли -->
+      <div class="notice-box" id="state-loading" role="status">Загружаю площадку…</div>
+
+      <!-- Площадки нет или доступ к ней закрыт: для постороннего это выглядит одинаково -->
+      <div class="empty-box" id="state-gone" hidden>
+        <div class="big">404</div>
+        <p>Площадка недоступна: её удалили, или вас больше нет в её команде</p>
+        <div class="empty-actions">
+          <a class="btn-primary sm" href="/app">К списку площадок</a>
+        </div>
+      </div>
+
+      <!-- Сервер не ответил -->
+      <div class="warn-box" id="state-offline" role="alert" hidden>
+        <div class="row between">
+          <span>Не удалось загрузить площадку: нет связи с сервером.</span>
+          <button class="btn-action" type="button" id="state-retry">Повторить</button>
+        </div>
+      </div>
+
+      <div class="stack-lg" id="state-ready" hidden>
+        <!-- Команда -->
+        <section class="glass pad-card" aria-labelledby="team-title">
+          <div class="row between top">
+            <div>
+              <div class="card-label">команда</div>
+              <h2 class="settings-title" id="team-title">Кто управляет площадкой</h2>
+            </div>
+            <span class="status-badge muted" id="team-count"></span>
+          </div>
+          <p class="settings-text" id="team-text"></p>
+          <!-- Строки списка собирает workspace.js: имена вставляются как текст -->
+          <ul class="member-list" id="team-list"></ul>
+        </section>
+
+        <!-- Приглашения: видит и создаёт только владелец -->
+        <section class="glass pad-card" id="invites-card" aria-labelledby="invites-title" hidden>
+          <div class="row between top">
+            <div>
+              <div class="card-label">приглашения</div>
+              <h2 class="settings-title" id="invites-title">Пригласить модератора</h2>
+            </div>
+            <span class="status-badge muted" id="invite-quota"></span>
+          </div>
+          <p class="settings-text">
+            Создайте ссылку и отправьте её человеку, которому доверяете сцену. Ссылка одноразовая:
+            по ней в команду войдёт один человек. Пока ею не воспользовались, её можно отозвать.
+          </p>
+
+          <form id="invite-form" method="post" novalidate>
+            <div class="invite-form-row">
+              <div class="field">
+                <label class="field-label" for="invite-label">
+                  <span>Для кого ссылка</span>
+                  <span class="field-optional">необязательно</span>
+                </label>
+                <input class="kf-input studio" id="invite-label" name="label" type="text" maxlength="40" autocomplete="off"
+                       placeholder="например, имя модератора">
+              </div>
+              <button class="btn-primary sm" type="submit" id="invite-submit">Создать ссылку</button>
+            </div>
+            <div class="field-error" id="invite-label-error" hidden></div>
+            <div class="field-hint">Подпись видите только вы: по ней понятно, кому какая ссылка отправлена.</div>
+            <div class="warn-box form-alert" id="invite-error" role="alert" hidden></div>
+          </form>
+
+          <div class="divided">
+            <div class="card-label">ещё не использованы</div>
+            <ul class="member-list" id="invite-list"></ul>
+            <p class="list-empty" id="invite-empty" hidden>Неиспользованных приглашений нет.</p>
+          </div>
+        </section>
+
+        <div class="settings-grid" id="owner-settings" hidden>
+          <!-- Название -->
+          <form class="glass pad-card-sm" id="rename-form" method="post" novalidate>
+            <div class="card-label">название</div>
+            <h2 class="settings-title">Название площадки</h2>
+            <p class="settings-text">Его видят все участники команды и тот, кто открывает ссылку-приглашение.</p>
+            <div class="field">
+              <label class="field-label" for="rename-name">Название</label>
+              <input class="kf-input studio" id="rename-name" name="name" type="text" maxlength="40" autocomplete="off" required>
+              <div class="field-error" id="rename-name-error" hidden></div>
+            </div>
+            <div class="warn-box" id="rename-error" role="alert" hidden></div>
+            <div class="form-actions">
+              <button class="btn-primary sm" type="submit" id="rename-submit">Сохранить</button>
+            </div>
+          </form>
+
+          <!-- Удаление -->
+          <div class="glass pad-card-sm">
+            <div class="card-label">удаление</div>
+            <h2 class="settings-title">Удалить площадку</h2>
+            <p class="settings-text">
+              Площадка исчезнет у вас и у всех модераторов, неиспользованные приглашения перестанут
+              действовать. Вернуть её будет нельзя.
+            </p>
+            <div class="form-actions">
+              <button class="btn-ghost sm danger" type="button" id="delete-open">Удалить площадку…</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Выход из команды: только для модератора -->
+        <section class="glass pad-card-sm" id="leave-card" aria-labelledby="leave-title" hidden>
+          <div class="card-label">участие</div>
+          <h2 class="settings-title" id="leave-title">Выйти из команды</h2>
+          <p class="settings-text">
+            Площадка пропадёт из вашего списка, а управлять её сценой вы больше не сможете.
+            Вернуться можно только по новому приглашению от владельца.
+          </p>
+          <div class="form-actions">
+            <button class="btn-ghost sm danger" type="button" id="leave-open">Выйти из команды…</button>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <!-- Окно: ссылка-приглашение (показывается один раз) -->
+  <div class="modal" id="modal-invite-link" role="dialog" aria-modal="true" aria-labelledby="modal-invite-title" data-sticky>
+    <div class="modal-box">
+      <div class="modal-head">
+        <div>
+          <div class="modal-eyebrow">показывается один раз</div>
+          <h3 class="modal-title" id="modal-invite-title">Ссылка-приглашение</h3>
+        </div>
+      </div>
+      <div class="code-box">
+        <div class="code-value link-value" id="invite-link-value"></div>
+        <button class="btn-ghost sm" type="button" id="invite-link-copy">Скопировать</button>
+      </div>
+      <p class="settings-text modal-note" id="invite-link-note"></p>
+      <div class="notice-box">
+        Отправьте ссылку лично тому, кого приглашаете: войти по ней сможет любой, у кого она окажется.
+        Повторно ссылку показать нельзя — если она потеряется, отзовите приглашение и создайте новое.
+      </div>
+      <div class="modal-foot">
+        <button class="btn-primary sm" type="button" id="invite-link-done" data-autofocus>Готово</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Окно: подтверждение (убрать модератора, отозвать приглашение, выйти из команды) -->
+  <div class="modal" id="modal-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div>
+          <div class="modal-eyebrow" id="confirm-eyebrow">подтверждение</div>
+          <h3 class="modal-title" id="confirm-title">Вы уверены?</h3>
+        </div>
+        <button class="icon-btn" type="button" data-close-modal="modal-confirm" aria-label="Закрыть">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <p class="settings-text modal-note" id="confirm-text"></p>
+      <div class="warn-box" id="confirm-error" role="alert" hidden></div>
+      <div class="modal-foot">
+        <button class="btn-ghost sm" type="button" data-close-modal="modal-confirm" data-autofocus>Отмена</button>
+        <button class="btn-primary sm" type="button" id="confirm-submit">Подтвердить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Окно: удаление площадки — нужно набрать её название -->
+  <div class="modal" id="modal-delete" role="dialog" aria-modal="true" aria-labelledby="modal-delete-title">
+    <form class="modal-box" id="delete-form" method="post" novalidate>
+      <div class="modal-head">
+        <div>
+          <div class="modal-eyebrow">это нельзя отменить</div>
+          <h3 class="modal-title" id="modal-delete-title">Удалить площадку</h3>
+        </div>
+        <button class="icon-btn" type="button" data-close-modal="modal-delete" aria-label="Закрыть">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <p class="settings-text modal-note" id="delete-text"></p>
+      <div class="field">
+        <label class="field-label" for="delete-confirm-name">Название площадки</label>
+        <input class="kf-input studio" id="delete-confirm-name" name="confirmName" type="text" maxlength="80" autocomplete="off"
+               autocapitalize="none" spellcheck="false" required data-autofocus>
+        <div class="field-error" id="delete-confirm-name-error" hidden></div>
+      </div>
+      <div class="warn-box" id="delete-error" role="alert" hidden></div>
+      <div class="modal-foot">
+        <button class="btn-ghost sm" type="button" data-close-modal="modal-delete">Отмена</button>
+        <button class="btn-primary sm" type="submit" id="delete-submit">Удалить навсегда</button>
+      </div>
+    </form>
+  </div>
+</body>
+</html>

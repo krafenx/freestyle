@@ -1,81 +1,35 @@
 import { initAtmosphere } from '../core/atmosphere.js';
-import { bindModalDismiss, closeModal, initMobileNav, openModal, toast } from '../core/ui.js';
+import { bindModalDismiss, closeModal, initMobileNav, initTabs, openModal, toast } from '../core/ui.js';
 import { connectRealtime } from '../core/api.js';
+import { bindLogout, liveBadge, showUserChip } from '../core/cabinet.js';
+import { countOf, formatDay } from '../core/format.js';
 import {
   bindPasswordToggles, clearErrors, clearErrorsOnInput, copyText, hidePasswords, setFieldError,
   showServerError, withBusy,
 } from '../core/forms.js';
-import { describeError, fetchSession, logout, send } from '../core/session.js';
+import { describeError, fetchSession, goToLogin, logout, request, send } from '../core/session.js';
 
 initAtmosphere();
 initMobileNav();
 bindModalDismiss();
 bindPasswordToggles();
+bindLogout();
+initTabs();
 
 const $ = (id) => document.getElementById(id);
-const LOGIN_URL = '/login?next=%2Fapp';
-
-/* ---------- Разделы боковой панели ---------- */
-const tabs = [...document.querySelectorAll('.sidebar-nav [role="tab"]')];
-
-function selectTab(tab, { focus = false } = {}) {
-  tabs.forEach((t) => {
-    const selected = t === tab;
-    t.classList.toggle('active', selected);
-    t.setAttribute('aria-selected', String(selected));
-    t.tabIndex = selected ? 0 : -1;
-    const pane = document.getElementById(t.getAttribute('aria-controls'));
-    if (pane) pane.hidden = !selected;
-  });
-  if (focus) tab.focus();
-}
-
-tabs.forEach((tab, index) => {
-  tab.addEventListener('click', () => selectTab(tab));
-  tab.addEventListener('keydown', (e) => {
-    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
-    if (!step) return;
-    e.preventDefault();
-    selectTab(tabs[(index + step + tabs.length) % tabs.length], { focus: true });
-  });
-});
 
 /* ---------- Индикатор живого канала связи в шапке ---------- */
-const wsStatus = $('shell-ws-status');
-
-function setStatus(tone, text) {
-  if (!wsStatus) return;
-  wsStatus.className = `status-badge ${tone}`;
-  wsStatus.replaceChildren(Object.assign(document.createElement('span'), { className: 'dot' }), text);
-}
-
-connectRealtime({
-  channel: 'workspace',
-  onStatus(st) {
-    if (st.state === 'connected') {
-      setStatus('live', typeof st.rttMs === 'number' ? `на связи · ${st.rttMs} мс` : 'на связи');
-    } else if (st.state === 'reconnecting') {
-      setStatus('amber', 'переподключение');
-    } else {
-      setStatus('muted', 'связь…');
-    }
-  },
-});
+connectRealtime({ channel: 'workspace', onStatus: liveBadge($('shell-ws-status')) });
 
 /* ---------- Кто вошёл ----------
    Имена вставляются как текст (textContent), а не как разметка: что бы человек
    ни написал в отображаемом имени, на странице это останется просто текстом. */
 function showUser(user, activeSessions) {
-  // «12 ноября 2026 года»: год дописываем сами, иначе браузер ставит «г.» и в конце фразы выходят две точки
-  const createdAt = new Date(user.createdAt);
-  const created = `${createdAt.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} ${createdAt.getFullYear()} года`;
+  showUserChip(user);
   $('me-name').textContent = user.displayName;
   $('me-login').textContent = `@${user.username}`;
-  $('user-chip-name').textContent = user.displayName;
-  $('user-chip-letter').textContent = [...user.displayName][0] || '?';
-  $('user-chip').hidden = false;
   $('hello-title').textContent = `Здравствуйте, ${user.displayName}`;
-  $('hello-text').textContent = `Вы вошли как ${user.username}. Аккаунт создан ${created}.`;
+  $('hello-text').textContent = `Вы вошли как ${user.username}. Аккаунт создан ${formatDay(user.createdAt)}.`;
   $('profile-login').textContent = user.username;
   $('password-username').value = user.username;
   if (document.activeElement !== $('profile-display')) $('profile-display').value = user.displayName;
@@ -89,40 +43,127 @@ async function loadAccount() {
     return false;
   }
   if (!session.authenticated) {
-    window.location.replace(LOGIN_URL);
+    goToLogin();
     return false;
   }
   showUser(session.user, session.activeSessions);
   return true;
 }
 
-loadAccount();
-// Вкладку открыли снова — сверяемся: вдруг вход закрыли с другого устройства
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) loadAccount();
-});
-
 // Вход устарел или закрыт с другого устройства — отправляем на страницу входа
 function leaveIfSignedOut(res) {
   if (res.status !== 401) return false;
-  window.location.assign(LOGIN_URL);
+  goToLogin();
   return true;
 }
 
-/* ---------- Выход ---------- */
-document.querySelectorAll('[data-logout]').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    withBusy(btn, 'Выходим…', async () => {
-      const result = await logout();
-      if (!result.ok) {
-        toast(result.message, 'error');
-        return;
-      }
-      window.location.assign('/');
-    });
+/* ---------- Площадки ----------
+   Карточки собираются из отдельных элементов, а названия и имена вставляются
+   как текст: разметка в названии площадки останется просто буквами. */
+const workspaceList = $('workspace-list');
+const newWorkspaceBtn = $('workspace-new-btn');
+
+function el(tag, className, text) {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
+function workspaceCard(workspace) {
+  const isOwner = workspace.role === 'owner';
+  const card = el('a', 'glass lift workspace-card');
+  card.href = `/app/w/${encodeURIComponent(workspace.id)}`;
+
+  const top = el('div', 'row between');
+  top.append(
+    el('span', `status-badge ${isOwner ? 'crimson' : 'muted'}`, isOwner ? 'владелец' : 'модератор'),
+    el('span', 'workspace-card-open', 'открыть')
+  );
+
+  const team = workspace.moderators > 0
+    ? countOf(workspace.moderators, ['модератор', 'модератора', 'модераторов'])
+    : 'без модераторов';
+  const meta = isOwner
+    ? `${team} · создана ${formatDay(workspace.createdAt)}`
+    : `владелец: ${workspace.ownerName} · вы в команде с ${formatDay(workspace.joinedAt)}`;
+
+  card.append(top, el('div', 'workspace-card-name', workspace.name), el('div', 'workspace-card-meta', meta));
+  return card;
+}
+
+async function loadWorkspaces() {
+  const res = await request('/api/workspaces');
+  if (leaveIfSignedOut(res)) return;
+  $('workspace-load-error').hidden = res.ok;
+  if (!res.ok) return;
+
+  const { workspaces, owned, ownedLimit } = res.data;
+  workspaceList.replaceChildren(...workspaces.map(workspaceCard));
+  $('workspace-empty').hidden = workspaces.length > 0;
+  $('workspaces-count').textContent = String(workspaces.length);
+
+  const full = owned >= ownedLimit;
+  newWorkspaceBtn.disabled = full;
+  $('workspace-quota').textContent = full
+    ? `Создано ${owned} из ${ownedLimit} — это предел. Чтобы создать новую площадку, удалите одну из своих.`
+    : `Ваших площадок: ${owned} из ${ownedLimit}`;
+}
+
+$('workspace-reload').addEventListener('click', () => {
+  withBusy($('workspace-reload'), 'Загружаем…', loadWorkspaces);
+});
+
+const newWorkspaceForm = $('workspace-new-form');
+const newWorkspaceName = $('workspace-new-name');
+const newWorkspaceError = $('workspace-new-error');
+clearErrorsOnInput(newWorkspaceForm, newWorkspaceError);
+
+// Окно открывается чистым: без прошлого названия и прошлой ошибки
+newWorkspaceBtn.addEventListener('click', () => {
+  newWorkspaceForm.reset();
+  clearErrors(newWorkspaceForm, newWorkspaceError);
+});
+
+newWorkspaceForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  clearErrors(newWorkspaceForm, newWorkspaceError);
+  if (!newWorkspaceName.value.trim()) {
+    setFieldError(newWorkspaceName, 'Введите название площадки.');
+    newWorkspaceName.focus();
+    return;
+  }
+  withBusy($('workspace-new-submit'), 'Создаём…', async () => {
+    const res = await send('/api/workspaces', { name: newWorkspaceName.value });
+    if (leaveIfSignedOut(res)) return;
+    if (!res.ok) {
+      showServerError({
+        res, message: describeError(res), fieldMap: { name: newWorkspaceName }, formErrorBox: newWorkspaceError,
+      });
+      return;
+    }
+    // Сразу открываем новую площадку: следующий шаг — пригласить в неё модераторов
+    window.location.assign(`/app/w/${encodeURIComponent(res.data.workspace.id)}`);
   });
 });
 
+function loadEverything() {
+  loadAccount();
+  loadWorkspaces();
+}
+
+loadEverything();
+// Вкладку открыли снова — сверяемся: вдруг вход закрыли с другого устройства,
+// а в площадку за это время пригласили или из неё убрали
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) loadEverything();
+});
+// Страницу вернули кнопкой «Назад» из памяти браузера — данные на ней могли устареть
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) loadEverything();
+});
+
+/* ---------- Выход на всех устройствах ---------- */
 $('logout-all-confirm').addEventListener('click', () => {
   withBusy($('logout-all-confirm'), 'Выходим…', async () => {
     const result = await logout({ everywhere: true });

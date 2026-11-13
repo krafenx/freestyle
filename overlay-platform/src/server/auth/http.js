@@ -1,5 +1,5 @@
 import express from 'express';
-import { AuthError } from './accounts.js';
+import { AppError } from '../errors.js';
 
 /* Вход и аккаунт со стороны адресов: что отвечает сервер на /api/auth/*,
    /api/account/* и как он охраняет личные страницы. */
@@ -76,7 +76,8 @@ function noStore(_req, res, next) {
 
 const handle = (fn) => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 
-const fields = (req) => (req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {});
+// Присланные данные: всегда объект, даже если прислали массив, строку или ничего
+export const fields = (req) => (req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {});
 
 export function createAuthHttp({ accounts, cookies }) {
   /* Узнаём человека по cookie. Если ключ устарел или отозван — стираем его
@@ -96,7 +97,7 @@ export function createAuthHttp({ accounts, cookies }) {
   }
 
   function reply(err, _req, res, next) {
-    if (!(err instanceof AuthError)) return next(err);
+    if (!(err instanceof AppError)) return next(err);
     if (err.extra?.retryAfterSeconds) res.setHeader('Retry-After', String(err.extra.retryAfterSeconds));
     return res.status(err.status).json({ ok: false, error: err.code, ...err.extra });
   }
@@ -210,6 +211,8 @@ export function createAuthHttp({ accounts, cookies }) {
   return {
     authRouter,
     accountRouter,
+    // То же самое для остальных разделов /api: узнать человека, потребовать вход, ответить отказом
+    api: { session: common, requireAuth, reply },
     pageSession: [noStore, loadSession],
     requireLoginPage,
     guestOnlyPage,

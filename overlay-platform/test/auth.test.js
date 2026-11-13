@@ -4,145 +4,20 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import { fileURLToPath } from 'node:url';
 import { createOverlayServer } from '../src/server/app.js';
 import { parseCookies } from '../src/server/auth/cookies.js';
 import { safeNextPath } from '../src/server/auth/http.js';
 import { checkNewPassword, createPasswordHasher } from '../src/server/auth/passwords.js';
 import { clientKey, createRateLimiter } from '../src/server/auth/rate-limit.js';
 import { newRecoveryCode, normalizeRecoveryCode } from '../src/server/auth/tokens.js';
+import {
+  CODE_PATTERN, DAY, FAST, GOOD_PASSWORD, MINUTE, NODE_FLAGS, NO_LIMITS, PROJECT_DIR,
+  childEnv, createVisitor, registerUser, runNode, startServer, uniqueName,
+} from './helpers.js';
 
 /* Этап 3: аккаунты и вход. Проверяется настоящий сервер с настоящей базой:
    регистрация, вход, выход, восстановление доступа, защита личных страниц,
    защита от перебора и от запросов с чужих сайтов. */
-
-const PROJECT_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const NODE_FLAGS = ['--no-warnings=ExperimentalWarning'];
-
-// В проверках пароль преобразуется в облегчённом режиме, иначе сотня регистраций шла бы минуту.
-// Рабочие параметры проверяются отдельно, в последнем блоке.
-const FAST = { N: 1024, r: 8, p: 1 };
-const MINUTE = 60 * 1000;
-const DAY = 24 * 60 * MINUTE;
-const NO_LIMITS = Object.fromEntries(
-  [
-    'attemptsPerClientAndName', 'attemptsPerClient', 'attemptsPerName',
-    'registrationsPerClient', 'registrationTriesPerClient', 'passwordChecksPerUser',
-  ].map((name) => [name, { limit: 100000, windowMs: MINUTE }])
-);
-
-const CODE_PATTERN = /^[A-HJKMNP-TV-Z2-9]{5}(?:-[A-HJKMNP-TV-Z2-9]{5}){3}$/;
-const GOOD_PASSWORD = 'длинный надёжный пароль 42';
-
-async function startServer(options = {}) {
-  const tmpDir = options.tmpDir || fs.mkdtempSync(path.join(os.tmpdir(), 'krafen-auth-test-'));
-  const server = createOverlayServer({
-    host: '127.0.0.1',
-    port: 0,
-    dbPath: path.join(tmpDir, 'auth-test.db'),
-    uploadsDir: path.join(tmpDir, 'uploads'),
-    passwordCost: FAST,
-    authLimits: NO_LIMITS,
-    ...options,
-  });
-  const { port } = await server.start();
-  return {
-    server,
-    tmpDir,
-    baseUrl: `http://127.0.0.1:${port}`,
-    db: server.db.raw,
-    async stop({ keepFiles = false } = {}) {
-      await server.stop();
-      if (!keepFiles) fs.rmSync(tmpDir, { recursive: true, force: true });
-    },
-  };
-}
-
-/* Посетитель с собственным «браузером»: помнит cookie между запросами.
-   Сервер по умолчанию верит заголовкам X-Forwarded-* только от программы на
-   этой же машине — проверки как раз идут с неё, поэтому так можно изобразить
-   посетителей с разных адресов и заход по https. */
-function createVisitor(baseUrl, { ip, https = false } = {}) {
-  const jar = new Map();
-
-  async function call(method, url, { body, headers = {} } = {}) {
-    const res = await fetch(`${baseUrl}${url}`, {
-      method,
-      redirect: 'manual',
-      headers: {
-        ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...(jar.size ? { Cookie: [...jar].map(([name, value]) => `${name}=${value}`).join('; ') } : {}),
-        ...(ip ? { 'X-Forwarded-For': ip } : {}),
-        ...(https ? { 'X-Forwarded-Proto': 'https' } : {}),
-        ...headers,
-      },
-      body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
-    });
-
-    const setCookies = res.headers.getSetCookie();
-    for (const line of setCookies) {
-      const pair = line.split(';')[0];
-      const name = pair.slice(0, pair.indexOf('='));
-      const value = pair.slice(pair.indexOf('=') + 1);
-      if (value === '' || /Max-Age=0\b/i.test(line)) jar.delete(name);
-      else jar.set(name, value);
-    }
-
-    const text = await res.text();
-    let data = null;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      // ответ не в формате JSON (страница или перенаправление)
-    }
-    return { status: res.status, data, text, headers: res.headers, setCookies };
-  }
-
-  return {
-    jar,
-    get: (url, options) => call('GET', url, options),
-    post: (url, body = {}, options = {}) => call('POST', url, { body, ...options }),
-    patch: (url, body = {}, options = {}) => call('PATCH', url, { body, ...options }),
-    async isSignedIn() {
-      return (await call('GET', '/api/auth/session')).data.authenticated;
-    },
-  };
-}
-
-let nameCounter = 0;
-const uniqueName = (prefix = 'user') => `${prefix}_${(nameCounter += 1)}`;
-
-async function registerUser(baseUrl, overrides = {}, visitorOptions = {}) {
-  const visitor = createVisitor(baseUrl, visitorOptions);
-  const username = overrides.username || uniqueName();
-  const password = overrides.password || GOOD_PASSWORD;
-  const res = await visitor.post('/api/auth/register', { username, password, ...overrides });
-  assert.equal(res.status, 201, `регистрация ${username} не удалась: ${res.text}`);
-  return { visitor, username, password, recoveryCode: res.data.recoveryCode, res };
-}
-
-/* Окружение для запуска отдельной программой. Настройки платформы из окружения
-   самих проверок в него не попадают, а файл .env из папки проекта не читается:
-   иначе проверка могла бы открыть рабочую базу вместо временной. */
-const SETTING_NAMES = ['HOST', 'PORT', 'DB_PATH', 'UPLOADS_DIR', 'TRUST_PROXY', 'REGISTRATION', 'SESSION_COOKIE_MODE'];
-
-function childEnv(extra = {}) {
-  const env = { ...process.env };
-  for (const name of SETTING_NAMES) delete env[name];
-  return { ...env, ENV_FILE: path.join(os.tmpdir(), 'krafen-no-such-env-file'), ...extra };
-}
-
-function runNode(args, env = {}) {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [...NODE_FLAGS, ...args], { cwd: PROJECT_DIR, env: childEnv(env) });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
-    child.stderr.on('data', (chunk) => { stderr += chunk; });
-    child.on('error', reject);
-    child.on('close', (code) => resolve({ code, stdout, stderr }));
-  });
-}
 
 /* ========================================================================== */
 

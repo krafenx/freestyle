@@ -1,3 +1,6 @@
+import { inTransaction } from '../db/database.js';
+import { AppError, isUniqueViolation } from '../errors.js';
+import { INVISIBLE_CHARS, cleanLine, lengthOf } from '../text.js';
 import { checkNewPassword, createPasswordHasher, normalizePassword } from './passwords.js';
 import { clientKey, createRateLimiter } from './rate-limit.js';
 import { hashRecoveryCode, newRecoveryCode, newSessionToken, safeEqualHex, sha256Hex } from './tokens.js';
@@ -6,15 +9,11 @@ import { hashRecoveryCode, newRecoveryCode, newSessionToken, safeEqualHex, sha25
    и настройки аккаунта. Здесь только правила; работа с адресами страниц
    и cookie — в http.js. */
 
-/* Отказ с понятной причиной. Наружу уходит код (например invalid_credentials),
-   а текст для человека подбирает страница. */
-export class AuthError extends Error {
+// Отказ, связанный со входом и аккаунтом (общее устройство отказов — в ../errors.js)
+export class AuthError extends AppError {
   constructor(code, status = 400, extra = {}) {
-    super(code);
+    super(code, status, extra);
     this.name = 'AuthError';
-    this.code = code;
-    this.status = status;
-    this.extra = extra;
   }
 }
 
@@ -46,21 +45,10 @@ overlay overlays studio workspace workspaces editor null undefined anonymous gue
 `.split(/\s+/).filter(Boolean));
 
 const DISPLAY_NAME_MAX = 40;
-// Управляющие и невидимые символы: ими подделывают имена и ломают вёрстку
-const INVISIBLE_CHARS = /[\u0000-\u001f\u007f-\u009f\u00ad\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g;
-
-function cleanDisplayName(value) {
-  if (typeof value !== 'string') return '';
-  return value.normalize('NFC').replace(INVISIBLE_CHARS, ' ').replace(/\s+/g, ' ').trim();
-}
 
 function cleanUserAgent(value) {
   if (typeof value !== 'string') return '';
   return value.replace(INVISIBLE_CHARS, ' ').slice(0, 200);
-}
-
-function isUniqueViolation(err) {
-  return err?.errcode === 2067 || /UNIQUE constraint failed/i.test(String(err?.message));
 }
 
 export function createAccounts({
@@ -71,6 +59,8 @@ export function createAccounts({
   registration = 'open',
   sessionTtlMs = SESSION_TTL_MS,
   maxSessionsPerUser = 20,
+  // Вызывается, когда чьи-то входы перестали действовать (см. sessionsEnded ниже)
+  onSessionsEnded = null,
 } = {}) {
   const hasher = createPasswordHasher({ cost: passwordCost });
   const limiter = createRateLimiter({ now });
@@ -109,6 +99,7 @@ export function createAccounts({
     deleteOtherSessions: db.prepare('DELETE FROM sessions WHERE user_id = ? AND id <> ?'),
     deleteExpired: db.prepare('DELETE FROM sessions WHERE expires_at <= ?'),
     countSessions: db.prepare('SELECT COUNT(*) AS n FROM sessions WHERE user_id = ? AND expires_at > ?'),
+    sessionAlive: db.prepare('SELECT 1 AS yes FROM sessions WHERE id = ? AND expires_at > ?'),
     trimSessions: db.prepare(`
       DELETE FROM sessions
       WHERE user_id = ? AND id NOT IN (
@@ -117,15 +108,17 @@ export function createAccounts({
     `),
   };
 
-  function transaction(work) {
-    db.exec('BEGIN IMMEDIATE');
+  const transaction = (work) => inTransaction(db, work);
+
+  /* Какие-то входы только что перестали действовать. Об этом узнаёт живой канал связи:
+     открытые страницы с закрытым входом отключаются сразу. Сам выход уже состоялся,
+     поэтому сбой при оповещении не должен превращать его в ошибку. */
+  function sessionsEnded(count = 1) {
+    if (!onSessionsEnded || !(Number(count) > 0)) return;
     try {
-      const result = work();
-      db.exec('COMMIT');
-      return result;
+      onSessionsEnded();
     } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
+      console.error('[krafen-overlay] Не удалось сообщить о закрытых входах:', err);
     }
   }
 
@@ -169,11 +162,13 @@ export function createAccounts({
 
   function createSession(userId, userAgent, replaceSessionId) {
     // Прежний вход в этом же браузере закрывается до создания нового (см. visitor в http.js)
-    if (Number.isInteger(replaceSessionId)) sql.deleteSession.run(replaceSessionId);
+    let ended = 0;
+    if (Number.isInteger(replaceSessionId)) ended += Number(sql.deleteSession.run(replaceSessionId).changes);
     const token = newSessionToken();
     const time = now();
     sql.insertSession.run(sha256Hex(token), userId, time, time, time + sessionTtlMs, cleanUserAgent(userAgent));
-    sql.trimSessions.run(userId, userId, maxSessionsPerUser);
+    ended += Number(sql.trimSessions.run(userId, userId, maxSessionsPerUser).changes);
+    sessionsEnded(ended);
     return { token, maxAgeSeconds: Math.floor(sessionTtlMs / 1000) };
   }
 
@@ -198,8 +193,8 @@ export function createAccounts({
       throw new AuthError('username_reserved', 400, { field: 'username' });
     }
 
-    const shownName = cleanDisplayName(displayName) || username;
-    if ([...shownName].length > DISPLAY_NAME_MAX) {
+    const shownName = cleanLine(displayName) || username;
+    if (lengthOf(shownName) > DISPLAY_NAME_MAX) {
       throw new AuthError('display_name_too_long', 400, { field: 'displayName' });
     }
 
@@ -276,6 +271,7 @@ export function createAccounts({
     const time = now();
     if (row.expires_at <= time) {
       sql.deleteSession.run(row.session_id);
+      sessionsEnded();
       return null;
     }
 
@@ -294,15 +290,23 @@ export function createAccounts({
   }
 
   function logout(sessionId) {
-    sql.deleteSession.run(sessionId);
+    sessionsEnded(sql.deleteSession.run(sessionId).changes);
   }
 
   function logoutEverywhere(userId) {
-    return Number(sql.deleteUserSessions.run(userId).changes);
+    const ended = Number(sql.deleteUserSessions.run(userId).changes);
+    sessionsEnded(ended);
+    return ended;
   }
 
   function countSessions(userId) {
     return sql.countSessions.get(userId, now()).n;
+  }
+
+  // Действует ли ещё этот вход. Нужно живому каналу связи: соединение открыто долго,
+  // а человек за это время мог выйти или сменить пароль
+  function isSessionAlive(sessionId) {
+    return Number.isInteger(sessionId) && Boolean(sql.sessionAlive.get(sessionId, now()));
   }
 
   /* ---------- Восстановление доступа по коду ---------- */
@@ -329,11 +333,12 @@ export function createAccounts({
     const passwordHash = await heavy(() => hasher.hash(newPassword));
     const freshCode = newRecoveryCode(); // использованный код больше не действует
     const time = now();
-    transaction(() => {
+    const ended = transaction(() => {
       sql.setPassword.run(passwordHash, time, time, row.id);
       sql.setRecovery.run(hashRecoveryCode(freshCode), time, row.id);
-      sql.deleteUserSessions.run(row.id); // все прежние входы закрываются
+      return sql.deleteUserSessions.run(row.id).changes; // все прежние входы закрываются
     });
+    sessionsEnded(ended);
     limiter.clear(`login:${clientKey(ip)}:${nameKey}`);
 
     const session = createSession(row.id, userAgent, replaceSessionId);
@@ -375,6 +380,7 @@ export function createAccounts({
       // Если пароль меняют из-за подозрения на взлом, чужие входы должны закрыться
       return Number(sql.deleteOtherSessions.run(row.id, sessionId).changes);
     });
+    sessionsEnded(endedSessions);
     return { endedSessions };
   }
 
@@ -388,9 +394,9 @@ export function createAccounts({
 
   function updateProfile({ userId, displayName } = {}) {
     const row = requireUser(userId);
-    const shownName = cleanDisplayName(displayName);
+    const shownName = cleanLine(displayName);
     if (!shownName) throw new AuthError('display_name_required', 400, { field: 'displayName' });
-    if ([...shownName].length > DISPLAY_NAME_MAX) {
+    if (lengthOf(shownName) > DISPLAY_NAME_MAX) {
       throw new AuthError('display_name_too_long', 400, { field: 'displayName' });
     }
     sql.setDisplayName.run(shownName, now(), row.id);
@@ -418,7 +424,9 @@ export function createAccounts({
 
   function cleanup() {
     limiter.sweep();
-    return Number(sql.deleteExpired.run(now()).changes);
+    const expired = Number(sql.deleteExpired.run(now()).changes);
+    sessionsEnded(expired);
+    return expired;
   }
 
   return {
@@ -429,6 +437,7 @@ export function createAccounts({
     logout,
     logoutEverywhere,
     countSessions,
+    isSessionAlive,
     recover,
     changePassword,
     renewRecoveryCode,

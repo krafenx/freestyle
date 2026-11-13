@@ -3,15 +3,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import WebSocket from 'ws';
 import { createOverlayServer } from '../src/server/app.js';
+import { openSocket } from './helpers.js';
 
 /* Этап 2: проверяем, что основа платформы действительно работает,
    а не просто «лежит в папке»: сервер, база, живой канал связи,
    страницы, стили, скрипты и шрифты. Вход и аккаунты — в auth.test.js. */
 
 // Обновления структуры базы, которые должны быть применены к этому моменту
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 function makeServer(tmpDir) {
   return createOverlayServer({
@@ -19,51 +19,6 @@ function makeServer(tmpDir) {
     port: 0,
     dbPath: path.join(tmpDir, 'test-overlay.db'),
     uploadsDir: path.join(tmpDir, 'uploads'),
-  });
-}
-
-function openSocket(url) {
-  return new Promise((resolve, reject) => {
-    const ws = new WebSocket(url);
-    const inbox = [];
-    const waiters = [];
-    const timer = setTimeout(() => {
-      ws.terminate();
-      reject(new Error('WebSocket: нет ответа за 4 секунды'));
-    }, 4000);
-
-    ws.on('message', (raw) => {
-      const msg = JSON.parse(String(raw));
-      const waiter = waiters.shift();
-      if (waiter) waiter(msg);
-      else inbox.push(msg);
-    });
-    ws.on('error', (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-    ws.on('open', () => {
-      clearTimeout(timer);
-      resolve({
-        ws,
-        next() {
-          if (inbox.length) return Promise.resolve(inbox.shift());
-          return new Promise((res, rej) => {
-            const t = setTimeout(() => rej(new Error('WebSocket: сообщение не пришло')), 4000);
-            waiters.push((msg) => {
-              clearTimeout(t);
-              res(msg);
-            });
-          });
-        },
-        close() {
-          return new Promise((res) => {
-            ws.once('close', res);
-            ws.close();
-          });
-        },
-      });
-    });
   });
 }
 

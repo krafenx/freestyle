@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Общие помощники интерфейса: уведомления, окна, мобильное меню,
+   Общие помощники интерфейса: уведомления, окна, вкладки, мобильное меню,
    ползунки и боковой указатель секций.
    ========================================================================== */
 
@@ -124,6 +124,48 @@ export function bindModalDismiss() {
       }
     }
   });
+}
+
+/* ---------- Вкладки боковой панели ----------
+   Вкладка с id="tab-plan" открывает блок из aria-controls и запоминается в адресе
+   как #plan: после обновления страницы человек остаётся на том же разделе,
+   и на раздел можно дать ссылку. Первая вкладка — раздел по умолчанию, без #. */
+export function initTabs({ selector = '.sidebar-nav [role="tab"]', onSelect } = {}) {
+  const tabs = [...document.querySelectorAll(selector)];
+  if (!tabs.length) return;
+  const keyOf = (tab) => tab.id.replace(/^tab-/, '');
+
+  function select(tab, { focus = false, remember = true } = {}) {
+    tabs.forEach((t) => {
+      const selected = t === tab;
+      t.classList.toggle('active', selected);
+      t.setAttribute('aria-selected', String(selected));
+      t.tabIndex = selected ? 0 : -1;
+      const pane = document.getElementById(t.getAttribute('aria-controls'));
+      if (pane) pane.hidden = !selected;
+    });
+    if (focus) tab.focus();
+    if (remember) {
+      const hash = tab === tabs[0] ? '' : `#${keyOf(tab)}`;
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}${hash}`);
+    }
+    onSelect?.(keyOf(tab));
+  }
+
+  const fromAddress = () => tabs.find((t) => keyOf(t) === window.location.hash.slice(1)) || tabs[0];
+
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => select(tab));
+    tab.addEventListener('keydown', (e) => {
+      const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (!step) return;
+      e.preventDefault();
+      select(tabs[(index + step + tabs.length) % tabs.length], { focus: true });
+    });
+  });
+
+  window.addEventListener('hashchange', () => select(fromAddress(), { remember: false }));
+  if (fromAddress() !== tabs[0]) select(fromAddress(), { remember: false });
 }
 
 /* ---------- Мобильное меню ---------- */

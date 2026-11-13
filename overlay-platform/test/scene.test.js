@@ -2704,6 +2704,8 @@ describe('Этап 5 — страницы, тексты и защита стра
 
   it('страницам разрешено загружать только своё; вложенная рамка не может уйти на чужой сайт', async () => {
     const page = await stage.visitor.get(`/app/w/${stage.id}/editor`);
+    // Общая политика — та, что у страниц без входа; личные страницы добавляют к ней frame-ancestors
+    const PUBLIC_POLICY = (await stage.visitor.get('/')).headers.get('content-security-policy');
     const policy = Object.fromEntries(
       page.headers.get('content-security-policy').split(';').map((part) => part.trim().split(/\s+/)).map(([name, ...values]) => [name, values])
     );
@@ -2721,9 +2723,34 @@ describe('Этап 5 — страницы, тексты и защита стра
     for (const [name, values] of Object.entries(policy)) {
       for (const value of values) assert.doesNotMatch(value, /^\*$|^https?:$|unsafe-eval/, `${name}: ${value}`);
     }
-    // Та же политика — у каждой страницы и у каждого ответа: её наследует рамка своего блока
-    for (const url of ['/', '/app', `/app/w/${stage.id}`, '/styles/fonts.css', `/api/workspaces/${stage.id}/scene`]) {
-      assert.equal((await stage.visitor.get(url)).headers.get('content-security-policy'), page.headers.get('content-security-policy'), url);
+    // Та же политика — у каждого ответа: её наследует рамка своего блока
+    for (const url of ['/', '/styles/fonts.css', `/api/workspaces/${stage.id}/scene`]) {
+      assert.equal((await stage.visitor.get(url)).headers.get('content-security-policy'), PUBLIC_POLICY, url);
+    }
+
+    /* Личные страницы строже: внутрь чужой рамки их не пускают (с этапа 8).
+       Правило задаётся отдельно от общей политики — и только добавляет запрет. */
+    assert.deepEqual(policy['frame-ancestors'], ["'none'"], 'редактор можно вставить в чужую рамку');
+    for (const url of ['/app', `/app/w/${stage.id}`, `/app/w/${stage.id}/editor`]) {
+      const res = await stage.visitor.get(url);
+      const own = Object.fromEntries(
+        res.headers.get('content-security-policy').split(';').map((part) => part.trim().split(/\s+/)).map(([name, ...values]) => [name, values])
+      );
+      assert.deepEqual(own['frame-ancestors'], ["'none'"], url);
+      assert.equal(res.headers.get('x-frame-options'), 'DENY', `${url}: нужен и старый заголовок`);
+      // Всё остальное — то же самое: запрет добавлен, а не заменил политику
+      delete own['frame-ancestors'];
+      const rest = Object.fromEntries(
+        PUBLIC_POLICY.split(';').map((part) => part.trim().split(/\s+/)).map(([name, ...values]) => [name, values])
+      );
+      assert.deepEqual(own, rest, `${url}: политика разошлась с общей`);
+    }
+
+    /* А страницы без входа — наоборот: запрета нет, их можно показывать в рамке.
+       Приглашение открывают и внутри других приложений, оверлей — в OBS. */
+    for (const url of ['/', '/login']) {
+      assert.equal((await stage.visitor.get(url)).headers.get('x-frame-options'), null, `${url}: лишний запрет рамки`);
+      assert.doesNotMatch((await stage.visitor.get(url)).headers.get('content-security-policy'), /frame-ancestors/, url);
     }
   });
 

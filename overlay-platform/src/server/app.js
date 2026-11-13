@@ -196,9 +196,21 @@ export function createOverlayServer(overrides = {}) {
   // Файлы интерфейса. no-cache = браузер каждый раз сверяется с сервером
   // и после обновления платформы не показывает устаревшую страницу.
   const pageOptions = { headers: { 'Cache-Control': 'no-cache' } };
-  // Страницы, связанные со входом, браузер не запоминает вовсе: после выхода
-  // кнопка «Назад» не должна показывать сохранённую копию кабинета.
-  const privatePageOptions = { headers: { 'Cache-Control': 'no-store' } };
+  /* Личные страницы — не только не запоминаются, но и не показываются во фрейме.
+     После выхода кнопка «Назад» не должна показывать сохранённую копию кабинета,
+     а чужой сайт не должен получить кабинет внутрь своей рамки: в обычном режиме
+     cookie браузер туда не отправит, но на соседних поддоменах того же домена —
+     отправит, и это уже не гость, а человек со своими правами.
+
+     `frame-ancestors 'none'` — правило для браузера; `X-Frame-Options: DENY` —
+     то же самое для тех, кто понимает только старую запись. Одно другому не мешает. */
+  const privatePageOptions = {
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Security-Policy': `${CONTENT_SECURITY_POLICY}; frame-ancestors 'none'`,
+      'X-Frame-Options': 'DENY',
+    },
+  };
   const page = (file, options = pageOptions) => (_req, res) => {
     res.sendFile(path.join(config.publicDir, file), options);
   };

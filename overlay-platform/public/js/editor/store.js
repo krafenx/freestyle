@@ -49,6 +49,35 @@ function mergePatches(older, newer) {
   return out;
 }
 
+/* Как назвать действие человеку: «Отменить перемещение» понятнее, чем «Отменить».
+   Названия полей — те же слова, что в панели свойств. */
+const FIELD_NAMES = {
+  x: 'положение',
+  y: 'положение',
+  width: 'размер',
+  height: 'размер',
+  opacity: 'непрозрачность',
+  visible: 'видимость',
+  locked: 'защиту от сдвига',
+  name: 'название',
+};
+
+function describeAction({ kind, values, name }) {
+  if (kind === 'add') return name ? `добавление «${name}»` : 'добавление источника';
+  if (kind === 'delete') return name ? `удаление «${name}»` : 'удаление источника';
+  if (kind === 'order') return 'порядок слоёв';
+  const keys = new Set([
+    ...Object.keys(values?.before || {}),
+    ...Object.keys(values?.settings?.before || {}),
+  ]);
+  if (keys.size === 1 && keys.has('settings')) return 'настройку';
+  if (keys.size === 1) return FIELD_NAMES[[...keys][0]] || 'правку';
+  if (keys.has('x') || keys.has('y') || keys.has('width') || keys.has('height')) {
+    if ([...keys].every((key) => ['x', 'y', 'width', 'height'].includes(key))) return 'положение и размер';
+  }
+  return 'правку';
+}
+
 export function createStore({ workspaceId, clientId, notify }) {
   const base = `/api/workspaces/${encodeURIComponent(workspaceId)}/scene`;
   const headers = { 'X-Client-Id': clientId };
@@ -92,6 +121,73 @@ export function createStore({ workspaceId, clientId, notify }) {
   /* Кто сейчас что двигает — со слов сервера. Ключ — метка вкладки (origin правки):
      так «двигаете вы» относится к этой вкладке, а не к человеку вообще. */
   let present = new Map();
+
+  /* ---------- История своих действий (Ctrl+Z) ----------
+     Отменяется только своё и только то, что не уехало на сервер: пока правка ждёт
+     своей паузы, назад её отыграть честно — значит вернуть прежние значения и не
+     отправлять ничего. А вот общая история правок площадки не ведётся: отменить
+     чужое действие — это не «вернуть как было», а новая правка поверх чужой работы,
+     и человек об этом не просил.
+
+     Запись помнит, что именно изменилось: значения до и после, по каждому полю.
+     Настройки — по каждому ключу отдельно: иначе отмена правки одного поля стёрла бы
+     соседние, сделанные после неё. */
+  const HISTORY_MAX = 200;
+  let past = []; // что можно отменить, старые записи в начале
+  let future = []; // что можно повторить, ближайшая — в конце
+
+  function historyValues(source, patch) {
+    const values = { before: {}, after: {} };
+    for (const [key, value] of Object.entries(patch)) {
+      if (key === 'settings') continue;
+      values.before[key] = source?.[key];
+      values.after[key] = value;
+    }
+    if (patch.settings) {
+      values.settings = { before: {}, after: {} };
+      for (const [key, value] of Object.entries(patch.settings)) {
+        values.settings.before[key] = source?.settings?.[key];
+        values.settings.after[key] = value;
+      }
+    }
+    return values;
+  }
+
+  function record(entry) {
+    // Ничего не изменилось — нечего и отменять
+    if (entry.values) {
+      const empty =
+        Object.keys(entry.values.before).length === 0 &&
+        Object.keys(entry.values.settings?.before || {}).length === 0;
+      if (empty) return;
+    }
+    past.push(entry);
+    if (past.length > HISTORY_MAX) past.shift();
+    future = [];
+    emit('history', historyState());
+  }
+
+  //Значения «до» и «после» → правка в нужную сторону
+  function valuesFor(values, side) {
+    const patch = {};
+    for (const [key, value] of Object.entries(values[side])) patch[key] = value;
+    if (values.settings) {
+      const settings = {};
+      for (const [key, value] of Object.entries(values.settings[side])) settings[key] = value;
+      if (Object.keys(settings).length) patch.settings = settings;
+    }
+    return patch;
+  }
+
+  function historyState() {
+    const last = past[past.length - 1];
+    return {
+      canUndo: past.length > 0,
+      canRedo: future.length > 0,
+      undoLabel: last ? describeAction(last) : '',
+      redoLabel: future.length ? describeAction(future[future.length - 1]) : '',
+    };
+  }
 
   /* ---------- Подписки ---------- */
   const listeners = new Map();
@@ -379,6 +475,159 @@ export function createStore({ workspaceId, clientId, notify }) {
     return false;
   }
 
+  /* ---------- Отмена: то, что уже на сервере ----------
+     Не всё удаётся отменить «до отправки»: удаление уходит сразу, а добавление —
+     пока человек не успел за это время ничего другого. Тогда отмена — это новая
+     правка: вернуть источник или убрать его. Идёт она тихо, мимо истории, и не мешает
+     человеку работать: важно только, чтобы страница и сервер снова сошлись. */
+  function send(path, body, { quiet = false } = {}) {
+    return enqueue(async () => {
+      const res = await call('POST', path, body);
+      if (res.ok) {
+        backOnline();
+        adoptVersion(res.data.version);
+        if (res.data.order) applyOrder(res.data.order);
+        emit('change', { kind: 'all' });
+        return res.data;
+      }
+      if (!quiet) commandFailed(res);
+      needRefetch = true;
+      return null;
+    });
+  }
+
+  /* Вернуть удалённый источник: создаём его заново с прежними полями и настройками.
+     Номер будет новый — старый уже занят историей и живым каналом, да и неважно:
+     на странице источник узнают по месту и содержимому. */
+  function restoreSource(entry) {
+    const source = entry.source;
+    if (!source) return null;
+    entry.ids ??= [];
+    const props = {
+      name: source.name,
+      x: source.x,
+      y: source.y,
+      width: source.width,
+      height: source.height,
+      opacity: source.opacity,
+      visible: source.visible,
+      locked: source.locked,
+      settings: source.settings,
+    };
+    if (source.fileId) props.file = source.fileId;
+    entry.restoring = send('/sources', { type: source.type, props }, { quiet: true }).then((data) => {
+      if (!data?.source) return null;
+      // Номер изменился: запись истории теперь указывает на новый источник
+      entry.originalId ??= entry.id;
+      entry.id = data.source.id;
+      entry.source = { ...source, id: data.source.id };
+      return data.source.id;
+    });
+    return { id: entry.id };
+  }
+
+  /* ---------- Отмена: шаг назад или вперёд ----------
+     Возвращает запись в историю (её показывают человеку) или null, если идти некуда.
+     Правка источника: возвращаем прежние значения и убираем её из очереди на отправку.
+     Создание и удаление: пока ответа нет, отменять нечего — источник просто не появился
+     или ещё не исчез, и на сервер ничего не уходило. */
+  function step(direction) {
+    if (gone) return null;
+    const from = direction < 0 ? past : future;
+    const to = direction < 0 ? future : past;
+    const entry = from[from.length - 1];
+    if (!entry) return null;
+
+    if (entry.kind !== 'change') {
+      from.pop();
+      to.push(entry);
+      if (entry.kind === 'add') {
+        if (!entry.id) return null; // ответа ещё нет: источника нет и на странице
+        if (find(entry.id)) {
+          // Источник уже на сервере — убрать его оттуда значит удалить
+          dropLocal(entry.id);
+          send(`/sources/${encodeURIComponent(entry.id)}/delete`, { quiet: true });
+        }
+      } else if (entry.kind === 'delete') {
+        // Обе стороны: и на странице, и на сервере. Создаём копию прежнего источника
+        // и возвращаем порядок — иначе следующая перезагрузка страницы всё отменит.
+        /* Место в слоях считается по старому номеру: в списке «до удаления» записан он.
+           А переставить на него нужно уже новый источник — ждём ответа сервера. */
+        const oldId = entry.id;
+        const index = Math.max(0, entry.order.indexOf(oldId));
+        const restored = restoreSource(entry);
+        if (restored) {
+          pending.delete(restored.id);
+          entry.restoring.then((newId) => {
+            if (!newId) return;
+            send(`/sources/${encodeURIComponent(newId)}/move`, { index });
+          });
+        }
+      } else if (entry.kind === 'order') {
+        // Запомнили «до» — при повторном шаге это станет «после»
+        entry.after ??= state.sources.map((source) => source.id);
+        const order = direction < 0 ? entry.order : entry.after;
+        applyOrder(order);
+        emit('change', { kind: 'all' });
+        /* Порядок на сервере меняется по одному источнику, а не целиком: вернуть его
+           прежним можно, только переставив каждый источник на своё место — снизу вверх,
+           потому что каждая перестановка сдвигает соседей. */
+        for (const [index, sourceId] of order.entries()) {
+          send(`/sources/${encodeURIComponent(sourceId)}/move`, { index });
+        }
+      }
+      emit('history', historyState());
+      setSave();
+      return entry;
+    }
+
+    const source = find(entry.id);
+    if (!source) {
+      // Источник успели удалить (своими руками или чужими) — эта запись больше ничего не значит
+      from.pop();
+      emit('history', historyState());
+      return null;
+    }
+
+    from.pop();
+    const patch = valuesFor(entry.values, direction < 0 ? 'before' : 'after');
+    // Отменённой правки в очереди быть не должно: иначе она уедет на сервер после отмены.
+    // Если в очереди есть другие поля того же источника, их не трогаем — они отдельные.
+    const queued = pending.get(entry.id) || null;
+    /* Отмена (назад): тех полей, которые она вернула, в очереди на отправку быть не должно.
+       Повтор (вперёд): они, наоборот, должны уехать на сервер — как обычная правка.
+       Поля, которых отмена не касается, остаются как были. */
+    const keep = (source_) => {
+      const rest = {};
+      for (const [key, value] of Object.entries(source_ || {})) {
+        if (key === 'settings') continue;
+        if (!(key in patch)) rest[key] = value;
+      }
+      if (source_?.settings) {
+        const settings = {};
+        for (const [key, value] of Object.entries(source_.settings)) {
+          if (!(key in (patch.settings || {}))) settings[key] = value;
+        }
+        if (Object.keys(settings).length) rest.settings = settings;
+      }
+      return rest;
+    };
+    const next = direction < 0 ? keep(queued) : mergePatches(queued, patch);
+    if (Object.keys(next).length) pending.set(entry.id, next);
+    else pending.delete(entry.id);
+    replace(applyPatch(source, patch));
+    to.push(entry);
+    emit('change', { kind: 'source', id: entry.id });
+    emit('history', historyState());
+    setSave();
+    /* Отмена и повтор — такие же правки, как и всё остальное: то, что осталось
+       неотправленным, уходит на сервер обычным порядком. Если не осталось ничего —
+       отправлять нечего, и висящий таймер только зря разбудил бы страницу. */
+    if (pending.size) scheduleFlush(SAVE_DELAY_MS);
+    else clearTimeout(flushTimer), (flushTimer = null);
+    return entry;
+  }
+
   function flush(force = false) {
     clearTimeout(flushTimer);
     flushTimer = null;
@@ -472,10 +721,20 @@ export function createStore({ workspaceId, clientId, notify }) {
       if (!source || gone) return;
       const changed = replace(applyPatch(source, patch));
       pending.set(id, mergePatches(pending.get(id), patch));
+      // Пока источник тянут, история не растёт: отменять там нечего, запись была бы на каждый шаг
+      if (save && changed) record({ kind: 'change', id, values: historyValues(source, patch), name: source.name });
       if (changed) emit('change', { kind: 'source', id });
       if (save) scheduleFlush(soon ? 0 : delay);
       setSave();
     },
+
+    /* ---------- Отмена своих действий ----------
+       Возвращает true, если отменять было что. Всё, что отменяется, ещё не уехало
+       на сервер: правка ждёт своей паузы, а создание и удаление — ответа.
+       Значит, отмена — это просто «забыть эту правку», а не новая правка поверх. */
+    undo: () => step(-1),
+    redo: () => step(1),
+    history: () => historyState(),
 
     flush: () => flush(),
     flushUrgent,
@@ -503,6 +762,7 @@ export function createStore({ workspaceId, clientId, notify }) {
         adoptVersion(res.data.version);
         state.sources = [...state.sources, res.data.source];
         applyOrder(res.data.order);
+        record({ kind: 'add', id: res.data.source.id, name: res.data.source.name });
         emit('change', { kind: 'all' });
         return res.data.source;
       });
@@ -520,12 +780,16 @@ export function createStore({ workspaceId, clientId, notify }) {
         adoptVersion(res.data.version);
         state.sources = [...state.sources, res.data.source];
         applyOrder(res.data.order);
+        record({ kind: 'add', id: res.data.source.id, name: res.data.source.name });
         emit('change', { kind: 'all' });
         return res.data.source;
       });
     },
 
     remove(id) {
+      // Что удаляем — для отмены: сам источник и порядок, в котором он стоял
+      const removed = find(id);
+      const order = state.sources.map((source) => source.id);
       return enqueue(async () => {
         pending.delete(id); // правки удаляемого источника отправлять незачем
         const res = await call('POST', `/sources/${encodeURIComponent(id)}/delete`);
@@ -537,6 +801,7 @@ export function createStore({ workspaceId, clientId, notify }) {
         if (res.ok) adoptVersion(res.data.version);
         dropLocal(id);
         if (res.ok) applyOrder(res.data.order);
+        if (res.ok && removed) record({ kind: 'delete', id, source: removed, order, name: removed.name });
         emit('change', { kind: 'all' });
         return true;
       });
@@ -548,9 +813,11 @@ export function createStore({ workspaceId, clientId, notify }) {
       const to = Math.min(state.sources.length - 1, Math.max(0, index));
       if (from < 0 || from === to) return Promise.resolve(false);
       // Сразу показываем новый порядок; сервер его подтвердит или поправит
+      const order = state.sources.map((source) => source.id);
       const next = state.sources.filter((source) => source.id !== id);
       next.splice(to, 0, state.sources[from]);
       state.sources = next;
+      record({ kind: 'order', id, order, name: state.sources[to]?.name });
       emit('change', { kind: 'all' });
 
       return enqueue(async () => {

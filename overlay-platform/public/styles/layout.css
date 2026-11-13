@@ -692,7 +692,9 @@ main {
 .sidebar-title {
   margin-top: 4px;
   font-family: var(--font-heading);
+  font-weight: 400;
   font-size: 21px;
+  line-height: 1.25;
   color: #fff;
 }
 
@@ -872,6 +874,125 @@ a.user-chip:hover {
 
 .mobile-nav .btn-ghost {
   margin-top: 10px;
+}
+
+/* ---------- Список площадок в кабинете ---------- */
+.workspace-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 290px), 1fr));
+  gap: 20px;
+}
+
+.workspace-grid:empty {
+  display: none;
+}
+
+.workspace-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 22px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.workspace-card-name {
+  font-family: var(--font-heading);
+  font-size: 24px;
+  line-height: 1.2;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
+.workspace-card-meta {
+  margin-top: auto;
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 1.6;
+  color: var(--silver);
+  overflow-wrap: anywhere;
+}
+
+.workspace-card-open {
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--silver-dim);
+  transition: color 0.3s var(--ease);
+}
+
+.workspace-card:hover .workspace-card-open,
+.workspace-card:focus-visible .workspace-card-open {
+  color: var(--crimson-light);
+}
+
+/* ---------- Страница площадки (/app/w/…) ---------- */
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--silver);
+  text-decoration: none;
+  transition: color 0.25s var(--ease);
+}
+
+.back-link:hover {
+  color: #fff;
+}
+
+/* Значение в строке «название — значение», когда это имя, а не число */
+.kv-text {
+  min-width: 0;
+  text-align: right;
+  color: var(--silver-bright);
+  overflow-wrap: anywhere;
+}
+
+.stack-lg {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Поле и кнопка в одну строку; сообщения под ними не сдвигают кнопку */
+.invite-form-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.invite-form-row .field {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+/* ---------- Страница приглашения (/invite/…) ---------- */
+.invite-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.invite-actions .auth-submit {
+  margin-top: 0;
+}
+
+.invite-actions .auth-links {
+  margin-top: 6px;
+}
+
+.auth-links .who {
+  font-weight: 500;
+  color: #fff;
+  overflow-wrap: anywhere;
 }
 
 /* Три колонки будущего редактора: слои · сцена · свойства */
@@ -1204,6 +1325,15 @@ footer.site-footer .foot-brand {
   footer.site-footer {
     padding-bottom: 120px;
     letter-spacing: 0.2em;
+  }
+}
+
+/* Самые узкие телефоны. В шапке кабинета стоят название сайта, индикатор связи
+   и кнопка меню; с замером задержки («на связи · 123 мс») они в 320 точек
+   не помещаются, и кнопка меню уезжала за край экрана. Здесь замер не показывается. */
+@media (max-width: 359px) {
+  .topnav .status-badge .badge-extra {
+    display: none;
   }
 }
 

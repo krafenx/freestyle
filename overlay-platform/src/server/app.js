@@ -5,8 +5,11 @@ import express from 'express';
 import { createAccounts } from './auth/accounts.js';
 import { createSessionCookies } from './auth/cookies.js';
 import { createAuthHttp, crossSiteGuard } from './auth/http.js';
+import { isLinkToken } from './auth/tokens.js';
 import { loadConfig } from './config.js';
 import { openDatabase } from './db/database.js';
+import { createWorkspacesHttp } from './workspaces/http.js';
+import { PUBLIC_ID_LENGTH, createWorkspaces } from './workspaces/workspaces.js';
 import { createRealtimeHub } from './ws/hub.js';
 
 /* Что страницам разрешено загружать: только собственные файлы платформы.
@@ -36,7 +39,6 @@ export function createOverlayServer(overrides = {}) {
   const db = openDatabase(config.dbPath);
   const app = express();
   const httpServer = http.createServer(app);
-  const realtime = createRealtimeHub(httpServer);
 
   // Аккаунты. Часы, стоимость проверки пароля и пороги попыток подменяются только в проверках
   const accounts = createAccounts({
@@ -46,11 +48,32 @@ export function createOverlayServer(overrides = {}) {
     passwordCost: overrides.passwordCost,
     limits: overrides.authLimits,
     sessionTtlMs: overrides.sessionTtlMs,
+    // Вход закончился — страницы площадок с этим входом отключаются от живого канала сразу
+    onSessionsEnded: () => realtime.recheck(),
   });
   const authHttp = createAuthHttp({
     accounts,
     cookies: createSessionCookies({ mode: config.sessionCookieMode }),
   });
+
+  // Площадки, модераторы и приглашения. О каждом изменении узнают открытые страницы площадки
+  const workspaces = createWorkspaces({
+    db: db.raw,
+    now: overrides.now,
+    limits: overrides.workspaceLimits,
+    onChange: (event) => realtime.announceWorkspace(event),
+  });
+
+  /* Живой канал связи. В канал площадки попадает только тот, у кого действует вход
+     и кто прямо сейчас её владелец или модератор; это же проверяется перед каждой
+     отправкой сообщения. */
+  const realtime = createRealtimeHub(httpServer, {
+    now: overrides.now,
+    guard: ({ workspaceId, userId, sessionId }) =>
+      (accounts.isSessionAlive(sessionId) ? workspaces.roleOf({ userId, workspaceId }) : null),
+  });
+
+  const workspacesHttp = createWorkspacesHttp({ workspaces, realtime, auth: authHttp.api });
 
   app.disable('x-powered-by');
   app.set('trust proxy', config.trustProxy);
@@ -68,6 +91,10 @@ export function createOverlayServer(overrides = {}) {
   // Вход, регистрация и настройки аккаунта
   app.use('/api/auth', authHttp.authRouter);
   app.use('/api/account', authHttp.accountRouter);
+
+  // Площадки и приглашения
+  app.use('/api/workspaces', workspacesHttp.workspacesRouter);
+  app.use('/api/invites', workspacesHttp.invitesRouter);
 
   app.use(express.json({ limit: '1mb' }));
 
@@ -90,7 +117,7 @@ export function createOverlayServer(overrides = {}) {
     res.json({
       ok: true,
       service: 'krafen-overlay-platform',
-      stage: 3,
+      stage: 4,
       serverTime: new Date().toISOString(),
       db: db.getHealth(),
       realtime: realtime.getStats(),
@@ -137,6 +164,25 @@ export function createOverlayServer(overrides = {}) {
   // Кабинет — только после входа
   app.get('/app', authHttp.pageSession, authHttp.requireLoginPage, page('app.html', privatePageOptions));
 
+  /* Страница площадки — тоже только после входа. Сама страница одинакова для всех:
+     есть ли у человека доступ к этой площадке, решает запрос её данных
+     (/api/workspaces/:id). Здесь отсекаются только заведомо неверные адреса. */
+  app.get(
+    '/app/w/:id',
+    (req, _res, next) => next(isLinkToken(req.params.id, PUBLIC_ID_LENGTH) ? undefined : 'route'),
+    authHttp.pageSession,
+    authHttp.requireLoginPage,
+    page('workspace.html', privatePageOptions)
+  );
+
+  /* Ссылка-приглашение открывается и гостю: он должен увидеть, куда его зовут,
+     до того как входить. Сама ссылка — секрет, поэтому браузеру запрещено
+     сообщать её адрес другим страницам. */
+  app.get('/invite/:token', (_req, res, next) => {
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    next();
+  }, page('invite.html', privatePageOptions));
+
   // Вход, регистрация и восстановление — только для тех, кто ещё не вошёл
   for (const name of ['login', 'register', 'recover']) {
     app.get(`/${name}`, authHttp.pageSession, authHttp.guestOnlyPage, page(`${name}.html`, privatePageOptions));
@@ -177,16 +223,21 @@ export function createOverlayServer(overrides = {}) {
     }
   });
 
-  // Раз в час убираем из базы истёкшие сеансы входа
+  // Раз в час убираем из базы истёкшие сеансы входа и просроченные приглашения
   let cleanupTimer = null;
 
-  async function start() {
+  function cleanup() {
     accounts.cleanup();
+    workspaces.cleanup();
+  }
+
+  async function start() {
+    cleanup();
     cleanupTimer = setInterval(() => {
       try {
-        accounts.cleanup();
+        cleanup();
       } catch (err) {
-        console.error('[krafen-overlay] Не удалось убрать истёкшие сеансы:', err);
+        console.error('[krafen-overlay] Не удалось убрать устаревшие записи:', err);
       }
     }, 60 * 60 * 1000);
     cleanupTimer.unref?.();
@@ -222,6 +273,7 @@ export function createOverlayServer(overrides = {}) {
     db,
     realtime,
     accounts,
+    workspaces,
     start,
     stop,
   };

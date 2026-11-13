@@ -874,6 +874,151 @@
   margin: 0 auto;
 }
 
+/* ---------- Списки людей и ссылок (команда площадки, приглашения) ----------
+   Строка: кружок с буквой, имя с подписью, статус и действие. На узком экране
+   статус и кнопка переносятся под имя. */
+.member-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.member-row:first-child {
+  border-top: none;
+}
+
+.member-row:last-child {
+  padding-bottom: 0;
+}
+
+.member-avatar {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--glass-border-strong);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--silver-bright);
+  text-transform: uppercase;
+}
+
+.member-main {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.member-name {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
+.member-name-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* Приглашение без подписи */
+.member-name.unnamed {
+  font-style: italic;
+  color: var(--silver);
+}
+
+.member-meta {
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--label);
+  overflow-wrap: anywhere;
+}
+
+/* Пометка «вы» рядом с собственным именем */
+.you-mark {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 122, 122, 0.4);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--crimson-light);
+}
+
+.list-empty {
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--silver-dim);
+}
+
+.member-list + .list-empty {
+  margin-top: 12px;
+}
+
+.card-label + .member-list {
+  margin-top: 4px;
+}
+
+/* Кнопка, которая выглядит как ссылка в тексте */
+.link-btn {
+  padding: 0 0 1px;
+  border: none;
+  border-bottom: 1px solid rgba(160, 160, 160, 0.3);
+  background: none;
+  font: inherit;
+  color: var(--silver-bright);
+  cursor: pointer;
+  transition:
+    color 0.25s var(--ease),
+    border-color 0.25s var(--ease);
+}
+
+.link-btn:hover {
+  color: #fff;
+  border-color: var(--crimson-light);
+}
+
+.link-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.empty-actions {
+  display: flex;
+  justify-content: center;
+  margin-top: 22px;
+}
+
+.form-alert {
+  margin-top: 14px;
+}
+
+/* Длинная ссылка в рамке кода: мельче и переносится в любом месте */
+.code-value.link-value {
+  font-size: 13px;
+  letter-spacing: 0;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
 /* ---------- Окна поверх страницы ---------- */
 .modal {
   position: fixed;
@@ -961,6 +1106,20 @@
   border-top: 1px solid var(--line);
 }
 
+/* Поясняющий текст в окне */
+.modal-note {
+  margin: 0 0 16px;
+  font-size: 13px;
+}
+
+.code-box + .modal-note {
+  margin-top: 16px;
+}
+
+.modal-note:empty {
+  display: none;
+}
+
 /* ---------- Всплывающие уведомления ---------- */
 .toast {
   position: fixed;
@@ -1028,6 +1187,9 @@
   }
   .modal-box {
     padding: 20px 16px;
+    /* На телефоне окно может занять почти всю высоту экрана: больше помещается без прокрутки */
+    max-height: calc(100vh - 24px);
+    max-height: calc(100dvh - 24px);
   }
   .toast {
     bottom: calc(78px + env(safe-area-inset-bottom));

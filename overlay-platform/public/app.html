@@ -62,13 +62,17 @@
       </div>
 
       <div class="sidebar-nav" role="tablist" aria-label="Разделы">
-        <button class="sidebar-link active" type="button" role="tab" id="tab-account" aria-selected="true" aria-controls="pane-account">
+        <button class="sidebar-link active" type="button" role="tab" id="tab-workspaces" aria-selected="true" aria-controls="pane-workspaces">
+          <span>Площадки</span>
+          <span class="mono" id="workspaces-count">—</span>
+        </button>
+        <button class="sidebar-link" type="button" role="tab" id="tab-account" aria-selected="false" aria-controls="pane-account" tabindex="-1">
           <span>Аккаунт</span>
           <span class="mono">вход</span>
         </button>
         <button class="sidebar-link" type="button" role="tab" id="tab-plan" aria-selected="false" aria-controls="pane-plan" tabindex="-1">
           <span>План работ</span>
-          <span class="mono">3 / 9</span>
+          <span class="mono">4 / 9</span>
         </button>
         <button class="sidebar-link" type="button" role="tab" id="tab-editor" aria-selected="false" aria-controls="pane-editor" tabindex="-1">
           <span>Каркас редактора</span>
@@ -77,7 +81,7 @@
       </div>
 
       <div class="notice-box">
-        Площадки и приглашение модераторов появятся здесь на <strong>этапе 4</strong>.
+        Редактор сцены появится на <strong>этапе 5</strong>, ссылка для OBS — на этапе 6.
       </div>
 
       <button class="btn-action" type="button" data-atmo-toggle aria-pressed="false">
@@ -86,11 +90,42 @@
     </aside>
 
     <div class="workspace-main">
-      <!-- Раздел 1: аккаунт -->
-      <section id="pane-account" role="tabpanel" aria-labelledby="tab-account" class="stack" style="gap: 20px;">
+      <!-- Раздел 1: площадки -->
+      <section id="pane-workspaces" role="tabpanel" aria-labelledby="tab-workspaces" class="stack" style="gap: 20px;">
+        <div class="glass pad-card">
+          <div class="sec-eyebrow" style="margin-bottom: 12px;">площадки</div>
+          <h1 class="pane-title" id="hello-title">Здравствуйте</h1>
+          <p class="sec-sub" style="margin-top: 10px; max-width: 680px;">
+            Площадка — это одна сцена оверлея и команда, которая ею управляет. Создайте свою
+            или примите приглашение от другого стримера: его площадка появится здесь же.
+          </p>
+          <div class="form-actions" style="margin-top: 20px;">
+            <button class="btn-primary sm" type="button" id="workspace-new-btn" data-open-modal="modal-workspace-new" disabled>Создать площадку</button>
+            <span class="kv-inline" id="workspace-quota"></span>
+          </div>
+        </div>
+
+        <div class="warn-box" id="workspace-load-error" role="alert" hidden>
+          <div class="row between">
+            <span>Не удалось загрузить список площадок.</span>
+            <button class="btn-action" type="button" id="workspace-reload">Повторить</button>
+          </div>
+        </div>
+
+        <!-- Карточки площадок собирает shell.js из ответа сервера -->
+        <div class="workspace-grid" id="workspace-list"></div>
+
+        <div class="empty-box" id="workspace-empty" hidden>
+          <div class="big">00</div>
+          <p>Площадок пока нет. Создайте первую — и пригласите в неё модераторов</p>
+        </div>
+      </section>
+
+      <!-- Раздел 2: аккаунт -->
+      <section id="pane-account" role="tabpanel" aria-labelledby="tab-account" class="stack" style="gap: 20px;" hidden>
         <div class="glass pad-card">
           <div class="sec-eyebrow" style="margin-bottom: 12px;">аккаунт</div>
-          <h1 class="pane-title" id="hello-title">Здравствуйте</h1>
+          <h1 class="pane-title">Аккаунт</h1>
           <p class="sec-sub" style="margin-top: 10px; max-width: 680px;" id="hello-text">Загружаю данные аккаунта…</p>
         </div>
 
@@ -182,30 +217,16 @@
             </div>
           </div>
         </div>
-
-        <div class="glass pad-card-sm">
-          <div class="row between">
-            <div>
-              <div class="card-label">площадки</div>
-              <h2 class="settings-title">Мои площадки</h2>
-            </div>
-            <span class="status-badge amber">появятся на этапе 4</span>
-          </div>
-          <div class="empty-box" style="margin-top: 16px; padding: 30px 18px;">
-            <div class="big" style="font-size: 32px;">00</div>
-            <p style="font-size: 15px;">Здесь будут площадки, которыми вы владеете и которые модерируете</p>
-          </div>
-        </div>
       </section>
 
-      <!-- Раздел 2: план работ с честными статусами -->
+      <!-- Раздел 3: план работ с честными статусами -->
       <section id="pane-plan" role="tabpanel" aria-labelledby="tab-plan" class="stack" style="gap: 20px;" hidden>
         <div class="glass pad-card">
-          <div class="sec-eyebrow" style="margin-bottom: 12px;">этап 3 из 9 завершён</div>
+          <div class="sec-eyebrow" style="margin-bottom: 12px;">этап 4 из 9 завершён</div>
           <h1 class="pane-title">План работ</h1>
           <p class="sec-sub" style="margin-top: 10px; max-width: 680px;">
-            Готовы основа, внешний вид и вход: сервер, база данных, живой канал связи,
-            аккаунты и защита личных страниц. Ниже — что уже сделано и что на очереди.
+            Готовы основа, вход и площадки: аккаунты, команда из владельца и модераторов,
+            приглашения по ссылке и проверка прав на сервере. Ниже — что уже сделано и что на очереди.
           </p>
         </div>
 
@@ -237,19 +258,19 @@
             <p class="stage-card-text">Аккаунты, вход, выход, восстановление доступа и защита личных страниц.</p>
           </div>
 
-          <div class="glass pad-card-sm" style="border-color: rgba(163, 19, 19, 0.45);">
+          <div class="glass pad-card-sm">
             <div class="row between">
-              <span class="card-label mono" style="color: var(--crimson-light);">этап 04</span>
-              <span class="status-badge crimson"><span class="dot"></span>следующий</span>
+              <span class="card-label mono">этап 04</span>
+              <span class="status-badge ok"><span class="dot"></span>готово</span>
             </div>
             <div class="stage-card-title">Площадки и роли</div>
             <p class="stage-card-text">Создание площадки, приглашение и отзыв модераторов, проверка прав.</p>
           </div>
 
-          <div class="glass pad-card-sm">
+          <div class="glass pad-card-sm" style="border-color: rgba(163, 19, 19, 0.45);">
             <div class="row between">
-              <span class="card-label mono">этап 05</span>
-              <span class="status-badge muted">в очереди</span>
+              <span class="card-label mono" style="color: var(--crimson-light);">этап 05</span>
+              <span class="status-badge crimson"><span class="dot"></span>следующий</span>
             </div>
             <div class="stage-card-title">Редактор</div>
             <p class="stage-card-text">Сцена, источники, слои, перемещение, размеры и настройки объектов.</p>
@@ -293,7 +314,7 @@
         </div>
       </section>
 
-      <!-- Раздел 3: раскладка будущего редактора -->
+      <!-- Раздел 4: раскладка будущего редактора -->
       <section id="pane-editor" role="tabpanel" aria-labelledby="tab-editor" hidden>
         <div class="glass pad-card-sm row between" style="margin-bottom: 16px;">
           <div>
@@ -335,6 +356,32 @@
         </div>
       </section>
     </div>
+  </div>
+
+  <!-- Окно: новая площадка -->
+  <div class="modal" id="modal-workspace-new" role="dialog" aria-modal="true" aria-labelledby="modal-workspace-title">
+    <form class="modal-box" id="workspace-new-form" method="post" novalidate>
+      <div class="modal-head">
+        <div>
+          <div class="modal-eyebrow">площадки</div>
+          <h3 class="modal-title" id="modal-workspace-title">Новая площадка</h3>
+        </div>
+        <button class="icon-btn" type="button" data-close-modal="modal-workspace-new" aria-label="Закрыть">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="field">
+        <label class="field-label" for="workspace-new-name">Название</label>
+        <input class="kf-input studio" id="workspace-new-name" name="name" type="text" maxlength="40" autocomplete="off" required data-autofocus>
+        <div class="field-error" id="workspace-new-name-error" hidden></div>
+        <div class="field-hint">Например, название канала. Его увидят модераторы; изменить можно в любой момент.</div>
+      </div>
+      <div class="warn-box" id="workspace-new-error" role="alert" hidden></div>
+      <div class="modal-foot">
+        <button class="btn-ghost sm" type="button" data-close-modal="modal-workspace-new">Отмена</button>
+        <button class="btn-primary sm" type="submit" id="workspace-new-submit">Создать</button>
+      </div>
+    </form>
   </div>
 
   <!-- Окно: новый код восстановления (показывается один раз) -->

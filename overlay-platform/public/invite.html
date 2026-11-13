@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <title>Приглашение — krafen studio</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/styles/fonts.css">
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/atmosphere.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <link rel="stylesheet" href="/styles/layout.css">
+  <script type="module" src="/js/pages/invite.js"></script>
+</head>
+<!-- Страница одна на все приглашения: самой ссылки и названия площадки в разметке нет.
+     Куда зовут и можно ли принять — отвечает сервер. -->
+<body>
+  <div id="glow" aria-hidden="true"></div>
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <div class="fog" aria-hidden="true"></div>
+  <div class="fog f2" aria-hidden="true"></div>
+  <div id="flash" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <nav class="topnav" aria-label="Разделы платформы">
+    <a class="brand" href="/" aria-label="krafen studio — на главную">
+      <span class="brand-word">kra<em>fen</em></span>
+      <span class="brand-tag">overlay studio</span>
+    </a>
+    <div class="topnav-right">
+      <a class="btn-action" id="nav-action" href="/app" hidden>Кабинет</a>
+    </div>
+  </nav>
+
+  <main class="auth-page">
+    <div class="glass auth-card">
+      <!-- Пока сервер проверяет ссылку -->
+      <section id="invite-loading" role="status">
+        <div class="sec-eyebrow">приглашение</div>
+        <h1 class="auth-title">Проверяю ссылку…</h1>
+        <p class="auth-lead">Это займёт пару секунд.</p>
+      </section>
+
+      <!-- Приглашение действует, его ещё не приняли -->
+      <section id="invite-pending" aria-labelledby="invite-title" hidden>
+        <div class="sec-eyebrow">приглашение</div>
+        <h1 class="auth-title" id="invite-title" tabindex="-1">Вас зовут в команду</h1>
+        <p class="auth-lead" id="invite-lead"></p>
+        <p class="auth-lead">
+          Модератор видит площадку и её команду, а с появлением редактора будет управлять
+          сценой оверлея наравне с владельцем.
+        </p>
+        <p class="auth-lead" id="invite-expires"></p>
+
+        <!-- Гость: сначала вход -->
+        <div class="invite-actions" id="invite-guest" hidden>
+          <div class="notice-box" id="invite-guest-note">
+            Чтобы принять приглашение, войдите или создайте аккаунт — после этого вы вернётесь на эту страницу.
+          </div>
+          <a class="btn-primary auth-submit" id="invite-login" href="/login">Войти</a>
+          <a class="btn-ghost auth-submit" id="invite-register" href="/register">Создать аккаунт</a>
+        </div>
+
+        <!-- Вошедший: можно принять -->
+        <div class="invite-actions" id="invite-invitee" hidden>
+          <div class="warn-box" id="invite-error" role="alert" hidden></div>
+          <button class="btn-primary auth-submit" type="button" id="invite-accept">Принять приглашение</button>
+          <div class="auth-links">
+            <span>Вы вошли как <strong class="who" id="invite-me"></strong></span>
+            <button class="link-btn" type="button" id="invite-switch">Войти под другим именем</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Тому, кто и так в этой площадке: владельцу или модератору -->
+      <section id="invite-known" aria-labelledby="known-title" hidden>
+        <div class="sec-eyebrow">приглашение</div>
+        <h1 class="auth-title" id="known-title" tabindex="-1"></h1>
+        <p class="auth-lead" id="known-text"></p>
+        <div class="invite-actions">
+          <a class="btn-primary auth-submit" id="known-open" href="/app">Открыть площадку</a>
+        </div>
+      </section>
+
+      <!-- Ссылка отозвана, использована, просрочена или испорчена: выглядит одинаково -->
+      <section id="invite-invalid" aria-labelledby="invalid-title" hidden>
+        <div class="sec-eyebrow">приглашение</div>
+        <h1 class="auth-title" id="invalid-title" tabindex="-1">Приглашение недействительно</h1>
+        <p class="auth-lead">
+          Ссылка отозвана, уже использована или её срок истёк. Попросите владельца площадки
+          прислать новую — каждая ссылка рассчитана на одного человека.
+        </p>
+        <div class="invite-actions">
+          <a class="btn-ghost auth-submit" id="invalid-home" href="/">На главную</a>
+        </div>
+      </section>
+
+      <!-- Сервер не ответил -->
+      <section id="invite-offline" aria-labelledby="offline-title" hidden>
+        <div class="sec-eyebrow">приглашение</div>
+        <h1 class="auth-title" id="offline-title" tabindex="-1">Нет связи с сервером</h1>
+        <p class="auth-lead">Проверить приглашение не удалось. Проверьте интернет и попробуйте снова.</p>
+        <div class="invite-actions">
+          <button class="btn-primary auth-submit" type="button" id="invite-retry">Повторить</button>
+        </div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

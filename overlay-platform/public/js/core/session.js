@@ -3,6 +3,7 @@
    тексты ошибок и безопасное возвращение на нужную страницу после входа.
    ========================================================================== */
 import { apiFetch } from './api.js';
+import { countOf, plural } from './format.js';
 
 /* Запрос к серверу, который не бросает исключений: обрыв связи превращается
    в обычный ответ с кодом network. Так форме не нужно ловить ошибки отдельно. */
@@ -22,15 +23,6 @@ export async function fetchSession() {
   const res = await request('/api/auth/session');
   if (!res.ok) return { reachable: false, authenticated: false, registrationOpen: true };
   return { reachable: true, ...res.data };
-}
-
-function plural(n, [one, few, many]) {
-  const tens = n % 100;
-  const units = n % 10;
-  if (tens >= 11 && tens <= 14) return many;
-  if (units === 1) return one;
-  if (units >= 2 && units <= 4) return few;
-  return many;
 }
 
 function formatWait(seconds) {
@@ -68,17 +60,53 @@ const MESSAGES = {
 
   recovery_required: 'Введите имя и код восстановления.',
   invalid_recovery: 'Имя или код восстановления не подходят.',
+
+  too_many_attempts: (data) => `Слишком много попыток. Попробуйте через ${formatWait(data.retryAfterSeconds)}.`,
+  too_many_requests: (data) => `Слишком часто. Попробуйте через ${formatWait(data.retryAfterSeconds)}.`,
+
+  // Площадки
+  workspace_not_found: 'Площадка не найдена: её удалили или у вас больше нет к ней доступа.',
+  owner_only: 'Это может сделать только владелец площадки.',
+  workspace_name_required: 'Введите название площадки.',
+  workspace_name_too_long: 'Название площадки — не длиннее 40 символов.',
+  workspace_name_taken: 'У вас уже есть площадка с таким названием.',
+  workspaces_limit: (data) => `У одного аккаунта может быть не больше ${countOf(data.limit, ['площадки', 'площадок', 'площадок'])}.`,
+  confirm_name_mismatch: 'Название не совпадает. Введите его так, как оно написано выше.',
+
+  // Команда и приглашения
+  member_not_found: 'Этого человека уже нет в команде.',
+  members_limit: (data) => `В команде уже ${countOf(data.limit, ['модератор', 'модератора', 'модераторов'])} — больше нельзя.`,
+  owner_cannot_leave: 'Владелец не может выйти из своей площадки — её можно только удалить.',
+  invite_label_too_long: 'Подпись — не длиннее 40 символов.',
+  invites_limit: (data) =>
+    `Неиспользованных приглашений уже ${data.limit}. Отзовите лишние или дождитесь, пока ими воспользуются.`,
+  invite_not_found: 'Этого приглашения уже нет: его отозвали или им воспользовались.',
+  invite_already_used: 'По этой ссылке уже вошли. Убрать человека можно в списке команды.',
+  invite_invalid: 'Приглашение недействительно: ссылка отозвана, уже использована или её срок истёк.',
+  invite_own_workspace: 'Это ваша собственная площадка — принимать приглашение не нужно.',
 };
 
 /* Текст ошибки для человека по ответу сервера. */
 export function describeError(res) {
-  const code = res?.data?.error;
-  if (code === 'too_many_attempts') {
-    return `Слишком много попыток. Попробуйте через ${formatWait(res.data.retryAfterSeconds)}.`;
-  }
-  if (MESSAGES[code]) return MESSAGES[code];
+  const text = MESSAGES[res?.data?.error];
+  if (typeof text === 'function') return text(res.data);
+  if (text) return text;
   if (res?.status >= 500) return MESSAGES.server_error;
   return 'Не удалось отправить данные. Обновите страницу и попробуйте снова.';
+}
+
+let signingOut = false;
+let signingOutTimer = null;
+
+/* Вход устарел или закрыт с другого устройства: отправляем на страницу входа,
+   а после него человек вернётся на эту же страницу. Адрес заменяется, а не
+   добавляется в историю: иначе кнопка «Назад» возвращала бы на страницу,
+   которая тут же снова отправляет на вход. */
+export function goToLogin() {
+  // Человек сам нажал «Выйти» на этой странице: она уже уходит туда, куда нужно
+  if (signingOut) return;
+  const here = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  window.location.replace(`/login?next=${encodeURIComponent(here)}`);
 }
 
 /* Куда идти после входа: только путь внутри этого же сайта.
@@ -131,7 +159,15 @@ export async function enterOrExplain(hintEl) {
 }
 
 export async function logout({ everywhere = false } = {}) {
+  /* Сервер закрывает вход и тут же отключает страницу от живого канала. Страница не должна
+     принять это за «вход закрыли с другого устройства» и увести человека на страницу входа:
+     он вышел сам. Пометка снимается через несколько секунд — на случай, если страница остаётся. */
+  signingOut = true;
+  clearTimeout(signingOutTimer);
   const res = await send(everywhere ? '/api/auth/logout-all' : '/api/auth/logout');
   // 401 при «выйти везде» значит, что сеанса уже нет — это тоже выход
-  return res.ok || res.status === 401 ? { ok: true } : { ok: false, message: describeError(res) };
+  const ok = res.ok || res.status === 401;
+  if (ok) signingOutTimer = setTimeout(() => { signingOut = false; }, 5000);
+  else signingOut = false;
+  return ok ? { ok: true } : { ok: false, message: describeError(res) };
 }

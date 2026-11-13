@@ -21,6 +21,24 @@ export function isSessionToken(value) {
   return typeof value === 'string' && SESSION_TOKEN_PATTERN.test(value);
 }
 
+/* Случайная строка для адресов и ссылок: номер площадки, ссылка-приглашение,
+   ссылка оверлея. Только цифры и строчные латинские буквы без похожих знаков
+   (нет i, l, o, u): такую ссылку не портят мессенджеры, которые принимают
+   подчёркивания и дефисы за разметку, и её можно продиктовать вслух.
+   В алфавите 32 знака — ровно 5 бит на знак, без перекоса. */
+const LINK_ALPHABET = '0123456789abcdefghjkmnpqrstvwxyz';
+const LINK_TOKEN_PATTERN = /^[0-9a-hjkmnp-tv-z]+$/;
+
+export function newLinkToken(length) {
+  let out = '';
+  for (const byte of crypto.randomBytes(length)) out += LINK_ALPHABET[byte & 31];
+  return out;
+}
+
+export function isLinkToken(value, length) {
+  return typeof value === 'string' && value.length === length && LINK_TOKEN_PATTERN.test(value);
+}
+
 /* Код восстановления: 20 символов группами по пять, без похожих друг на
    друга знаков (нет 0 и O, 1, I и L, U) — его придётся переписывать руками. */
 const RECOVERY_ALPHABET = 'ABCDEFGHJKMNPQRSTVWXYZ23456789';

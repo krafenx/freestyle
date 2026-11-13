@@ -52,9 +52,85 @@ const MIGRATIONS = [
       WHERE key = 'platform_stage';
     `,
   },
+  {
+    /* Площадки, модераторы и приглашения.
+
+       Владелец записан в самой площадке (owner_id): он ровно один, и база не даст
+       сохранить площадку без владельца. Модераторы — отдельной таблицей.
+       Приглашение хранится отпечатком ссылки (как ключ сеанса): прочитав базу,
+       воспользоваться чужим приглашением нельзя. Принятое приглашение остаётся
+       записью «по какой ссылке человек вошёл» — ровно одной на модератора.
+       Удаление площадки убирает её модераторов и приглашения, удаление аккаунта —
+       его площадки и участие в чужих.
+
+       В адресах и ответах сервера используются случайные номера (public_id):
+       порядковые номера строк наружу не выходят. Сцена и ссылка оверлея
+       добавятся на своих этапах — здесь только то, что уже используется. */
+    version: 3,
+    name: '003_workspaces',
+    sql: `
+      CREATE TABLE workspaces (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        public_id TEXT NOT NULL UNIQUE,
+        owner_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      ) STRICT;
+
+      CREATE INDEX workspaces_owner_idx ON workspaces (owner_id);
+
+      CREATE TABLE workspace_members (
+        workspace_id INTEGER NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+        user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (workspace_id, user_id)
+      ) STRICT, WITHOUT ROWID;
+
+      CREATE INDEX workspace_members_user_idx ON workspace_members (user_id);
+
+      CREATE TABLE workspace_invites (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        public_id TEXT NOT NULL UNIQUE,
+        workspace_id INTEGER NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL UNIQUE,
+        label TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        expires_at INTEGER NOT NULL,
+        accepted_by INTEGER REFERENCES users (id) ON DELETE CASCADE,
+        accepted_at INTEGER
+      ) STRICT;
+
+      CREATE INDEX workspace_invites_workspace_idx ON workspace_invites (workspace_id);
+      CREATE INDEX workspace_invites_accepted_idx ON workspace_invites (accepted_by);
+      CREATE UNIQUE INDEX workspace_invites_member_idx
+        ON workspace_invites (workspace_id, accepted_by) WHERE accepted_by IS NOT NULL;
+
+      UPDATE system_settings
+      SET value = '4', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE key = 'platform_stage';
+    `,
+  },
 ];
 
-export function openDatabase(dbPath) {
+/* Несколько изменений как одно целое: либо применяются все, либо ни одного.
+   BEGIN IMMEDIATE сразу занимает право записи — второй пишущий подождёт своей
+   очереди, а не получит отказ посреди работы. */
+export function inTransaction(db, work) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = work();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+/* upToVersion нужен только проверкам: так создаётся база «как на прошлом этапе»,
+   чтобы убедиться, что обновление её достраивает и ничего не теряет. */
+export function openDatabase(dbPath, { upToVersion = Infinity } = {}) {
   if (dbPath !== ':memory:') {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   }
@@ -82,17 +158,13 @@ export function openDatabase(dbPath) {
   );
 
   for (const migration of MIGRATIONS) {
+    if (migration.version > upToVersion) break;
     const exists = hasMigrationStmt.get(migration.version);
     if (!exists) {
-      db.exec('BEGIN IMMEDIATE;');
-      try {
+      inTransaction(db, () => {
         db.exec(migration.sql);
         recordMigrationStmt.run(migration.version, migration.name);
-        db.exec('COMMIT;');
-      } catch (err) {
-        db.exec('ROLLBACK;');
-        throw err;
-      }
+      });
     }
   }
 

@@ -30,7 +30,7 @@ export const NO_LIMITS = Object.fromEntries(
    как называется последнее и какой этап сообщает сервер. Меняется раз за этап — здесь. */
 export const SCHEMA_VERSION = 6;
 export const LATEST_MIGRATION = '006_live_edits';
-export const PLATFORM_STAGE = 8;
+export const PLATFORM_STAGE = 9;
 
 export const CODE_PATTERN = /^[A-HJKMNP-TV-Z2-9]{5}(?:-[A-HJKMNP-TV-Z2-9]{5}){3}$/;
 export const GOOD_PASSWORD = 'длинный надёжный пароль 42';

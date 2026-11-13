@@ -287,6 +287,32 @@
   display: none;
 }
 
+/* Чужая рука: источник, который прямо сейчас тянут на другой странице.
+   Пунктирная рамка и подпись — видно, кто и что двигает, и почему оно едет само. */
+.remote-box {
+  position: absolute;
+  border: 1px dashed rgba(255, 196, 120, 0.95);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+.remote-tag {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 7px;
+  border-radius: 3px;
+  background: rgba(30, 20, 8, 0.92);
+  border: 1px solid rgba(255, 196, 120, 0.55);
+  color: #ffd9a8;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
 .sel-handle {
   position: absolute;
   width: 11px;
@@ -515,6 +541,7 @@
 }
 
 .layer-name {
+  flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -522,6 +549,18 @@
 }
 
 /* Скрытый из эфира источник в списке приглушён */
+.layer-moving {
+  margin-left: auto;
+  padding-left: 6px;
+  color: rgba(255, 196, 120, 0.9);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 96px;
+}
+
 .layer-row.unseen .layer-name {
   color: var(--silver-dim);
   font-style: italic;

@@ -34,6 +34,9 @@ export function createLayers({ store, list, empty, count, buttons, onDelete, onD
     pick.title = module ? `${module.title}: ${source.name}` : source.name;
     // Название — как текст: разметка в нём останется буквами
     pick.append(icon(module?.icon || ICONS.unknown), el('span', 'layer-name', source.name));
+    // Кто-то другой тянет этот источник прямо сейчас — видно и в списке слоёв
+    const mover = store.presenceOf(source.id);
+    if (mover && !mover.mine) pick.append(el('span', 'layer-moving', `${mover.name || 'кто-то'} двигает`));
     pick.addEventListener('click', () => store.select(source.id));
 
     item.append(
@@ -66,6 +69,8 @@ export function createLayers({ store, list, empty, count, buttons, onDelete, onD
     // тащат по сцене, ничего из этого не меняется — и список не пересобирается
     const signature = JSON.stringify([
       store.state.selectedId, limits?.sources, sources.map((s) => [s.id, s.type, s.name, s.visible, s.locked]),
+      // Кто что двигает — тоже: подпись в строке меняется, и список пересобирается
+      store.presence().map((person) => [person.sourceId, person.name, person.mine]),
     ]);
     if (signature === drawn) return;
     drawn = signature;

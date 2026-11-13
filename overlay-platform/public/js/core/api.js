@@ -188,6 +188,17 @@ export function connectRealtime({ channel = 'system', ticket, key, onMessage, on
     pingNow() {
       return sendPing(ws);
     },
+    /* Сообщение серверу (присутствие на сцене: «я двигаю вот это»). Канала нет —
+       сообщение просто не уходит: страница от этого работать не перестаёт. */
+    send(payload) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+      try {
+        ws.send(typeof payload === 'string' ? payload : JSON.stringify(payload));
+        return true;
+      } catch {
+        return false;
+      }
+    },
     close: stop,
   };
 }

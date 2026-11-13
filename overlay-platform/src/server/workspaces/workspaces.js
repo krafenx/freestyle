@@ -63,6 +63,16 @@ export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = n
       LEFT JOIN workspace_members m ON m.workspace_id = w.id AND m.user_id = ?
       WHERE w.public_id = ?
     `),
+    // Подпись человека в площадке — для присутствия на сцене (см. nameOf)
+    accessName: db.prepare(`
+      SELECT CASE WHEN w.owner_id = ? THEN 'owner' WHEN m.user_id IS NOT NULL THEN 'moderator' END AS role,
+             u.display_name AS owner_name, mu.display_name AS member_name
+      FROM workspaces w
+      JOIN users u ON u.id = w.owner_id
+      LEFT JOIN workspace_members m ON m.workspace_id = w.id AND m.user_id = ?
+      LEFT JOIN users mu ON mu.id = m.user_id
+      WHERE w.public_id = ?
+    `),
     owned: db.prepare(`
       SELECT w.public_id, w.name, w.created_at,
              (SELECT COUNT(*) FROM workspace_members m WHERE m.workspace_id = w.id) AS moderators
@@ -168,6 +178,16 @@ export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = n
   // Кем человек приходится площадке прямо сейчас: owner, moderator или null
   function roleOf({ userId, workspaceId } = {}) {
     return find(userId, workspaceId)?.role ?? null;
+  }
+
+  /* Как человек подписан в этой площадке. Нужно только для присутствия на сцене
+     («Модератор двигает: Заголовок»): это та же подпись, что в списке команды,
+     и участникам площадки она и так известна. Постороннему — null. */
+  function nameOf({ userId, workspaceId } = {}) {
+    if (!Number.isInteger(userId) || !isLinkToken(workspaceId, PUBLIC_ID_LENGTH)) return null;
+    const row = sql.accessName.get(userId, userId, workspaceId);
+    if (!row?.role) return null;
+    return row.role === 'owner' ? row.owner_name : row.member_name ?? null;
   }
 
   // То же, но с отказом для постороннего
@@ -550,6 +570,7 @@ export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = n
     create,
     get,
     roleOf,
+    nameOf,
     requireMember,
     enter,
     rename,

@@ -69,13 +69,35 @@ uploadBadge.append(el('span', 'dot'), uploadText);
   sizer.append(el('span', 'dot'), el('span', '', uploadLabel(1)));
   $('status-slot').append(sizer);
 }
+/* Кто изменил сцену последним — на время, чтобы не занимать место постоянно.
+   Оверлею и гостю эта подпись не приходит: её ставит сервер только участникам площадки. */
+const actorBadge = $('actor-status');
+const actorText = el('span', 'badge-text');
+actorBadge.append(el('span', 'dot'), actorText);
+let actorUntil = 0;
+let actorTimer = null;
+
+function showActor(actor) {
+  if (!actor?.name) return;
+  actorText.textContent = `изменил ${actor.name}`;
+  actorBadge.title = actor.role === 'owner' ? 'Правку внёс владелец площадки' : 'Правку внёс модератор площадки';
+  actorBadge.hidden = false;
+  paintSlot();
+  actorUntil = Date.now() + 6000;
+  clearTimeout(actorTimer);
+  actorTimer = setTimeout(() => {
+    actorBadge.hidden = true;
+    paintSlot();
+  }, 6000);
+}
+
 let roleKnown = false;
 let uploadsActive = false;
 let sceneGone = false;
 
 function paintSlot() {
   uploadBadge.hidden = !uploadsActive;
-  roleBadge.hidden = !roleKnown || uploadsActive;
+  roleBadge.hidden = !roleKnown || uploadsActive || !actorBadge.hidden;
 }
 
 function showGone() {
@@ -540,8 +562,15 @@ function startLive() {
     onMessage(msg) {
       if (msg?.type === 'workspace:changed') {
         // Сцену меняли — сверяем версию; меняли саму площадку (название, команда) — перечитываем
-        if (msg.what === 'scene') store.signal(msg);
+        if (msg.what === 'scene') {
+          // Сервер сам подписал правку; своё движение не подписываем — это видно по рамке
+          if (!msg.mine) showActor(msg.actor);
+          store.signal(msg);
+        }
         else store.refresh();
+      } else if (msg?.type === 'workspace:presence') {
+        // Кто сейчас что двигает; сервер сам отметил, чьи это движения (mine)
+        store.setPresence(msg.people);
       } else if (msg?.type === 'denied') {
         store.refresh();
       } else if (msg?.type === 'pong' && typeof msg.clientTs === 'number' && typeof msg.serverTime === 'number') {
@@ -556,6 +585,8 @@ function stopLive() {
   live?.close();
   live = null;
   liveState = '';
+  store.setPresenceChannel(null);
+  store.setPresence([]);
   showLiveStatus({ state: 'denied' });
 }
 
@@ -567,6 +598,8 @@ async function start() {
     show('ready');
     showSave(store.saveState);
     stageApi.fit();
+    // Присутствие идёт тем же каналом; без канала двигать можно, просто другие этого не увидят
+    store.setPresenceChannel((at) => live?.send({ type: 'presence', at }));
     startLive();
   } else if (result === 'gone') {
     showGone();

@@ -28,9 +28,9 @@ export const NO_LIMITS = Object.fromEntries(
 
 /* Что должно быть у платформы к этому этапу: сколько обновлений структуры базы применено,
    как называется последнее и какой этап сообщает сервер. Меняется раз за этап — здесь. */
-export const SCHEMA_VERSION = 5;
-export const LATEST_MIGRATION = '005_overlay_link';
-export const PLATFORM_STAGE = 6;
+export const SCHEMA_VERSION = 6;
+export const LATEST_MIGRATION = '006_live_edits';
+export const PLATFORM_STAGE = 7;
 
 export const CODE_PATTERN = /^[A-HJKMNP-TV-Z2-9]{5}(?:-[A-HJKMNP-TV-Z2-9]{5}){3}$/;
 export const GOOD_PASSWORD = 'длинный надёжный пароль 42';

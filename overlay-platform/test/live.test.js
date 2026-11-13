@@ -503,12 +503,13 @@ describe('Этап 7 — на странице: изменение примен�
 /* ========================================================================== */
 
 describe('Этап 7 — обновление с прошлого этапа', () => {
-  it('сервер сообщает седьмой этап и шестую версию структуры базы', async () => {
+  it('сервер сообщает текущий этап и версию структуры базы', async () => {
     const ctx = await startServer();
     try {
       const health = (await createVisitor(ctx.baseUrl).get('/api/health')).data;
       assert.equal(health.stage, PLATFORM_STAGE);
-      assert.equal(health.stage, 7);
+      // Этап не откатывается назад: прошлый этап уже позади
+      assert.ok(health.stage >= 7);
       assert.equal(health.db.schemaVersion, SCHEMA_VERSION);
       assert.equal(health.db.schemaVersion, 6);
       assert.equal(health.db.latestMigration, LATEST_MIGRATION);
@@ -588,10 +589,10 @@ describe('Этап 7 — обновление с прошлого этапа', (
 describe('Этап 7 — страницы и документы рассказывают про правки на лету', () => {
   const readPublicPage = (name) => fs.readFileSync(path.join(PROJECT_DIR, 'public', name), 'utf8');
 
-  it('страницы называют текущим этап 7, а прошлый — прошлым', () => {
-    assert.match(readPublicPage('index.html'), /этап 7 из 9/);
-    assert.match(readPublicPage('app.html'), /<span class="mono">7 \/ 9<\/span>/);
-    assert.match(readPublicPage('app.html'), /этап 7 из 9 завершён/);
+  it('страницы называют текущим этап 8, а прошлый — прошлым', () => {
+    assert.match(readPublicPage('index.html'), /этап 8 из 9/);
+    assert.match(readPublicPage('app.html'), /<span class="mono">8 \/ 9<\/span>/);
+    assert.match(readPublicPage('app.html'), /этап 8 из 9 завершён/);
     assert.match(readPublicPage('app.html'), /Правки на лету в OBS и между модераторами/);
     // Ни одна страница и ни один скрипт больше не называют текущим этап 6
     const files = [];
@@ -606,8 +607,10 @@ describe('Этап 7 — страницы и документы рассказы
     }
     assert.ok(files.length > 20);
     for (const file of files) {
-      // «6 / 9» ищем как подпись кнопкой, а не как пропорцию 16 / 9 в оформлении
-      assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /этап(?:е|а)? 6\b|>6 \/ 9<|этап 6 из 9/i, path.relative(PROJECT_DIR, file));
+      /* Ищем только подпись о текущем этапе: «этап 7 из 9», «7 / 9» кнопкой кабинета.
+         Упоминание «(этап 7)» в пояснении к коду — это история, и она полезна. */
+      const text = fs.readFileSync(file, 'utf8');
+      assert.doesNotMatch(text, /этап 7 из 9|>7 \/ 9</i, path.relative(PROJECT_DIR, file));
     }
   });
 

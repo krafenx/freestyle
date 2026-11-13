@@ -177,7 +177,7 @@ export function createOverlayServer(overrides = {}) {
     res.json({
       ok: true,
       service: 'krafen-overlay-platform',
-      stage: 7,
+      stage: 8,
       serverTime: new Date().toISOString(),
       db: db.getHealth(),
       realtime: realtime.getStats(),

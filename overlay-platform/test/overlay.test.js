@@ -1137,7 +1137,7 @@ describe('Этап 6 — обновление с прошлого этапа', (
     }
   });
 
-  it('сервер сообщает седьмой этап и шестую версию структуры базы', async () => {
+  it('сервер сообщает текущий этап и версию структуры базы', async () => {
     const ctx = await startServer();
     try {
       const health = (await createVisitor(ctx.baseUrl).get('/api/health')).data;

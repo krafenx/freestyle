@@ -16,8 +16,6 @@ import { AppError } from '../errors.js';
 const ID_LENGTH = 12; // номера площадок и файлов
 const INCOMING = '.incoming'; // сюда файл пишется, пока загружается
 
-const MB = 1024 * 1024;
-
 export function createMediaStorage({ dir, now = Date.now } = {}) {
   const incomingDir = path.join(dir, INCOMING);
 
@@ -29,6 +27,17 @@ export function createMediaStorage({ dir, now = Date.now } = {}) {
       fs.unlinkSync(file);
     } catch (err) {
       if (err?.code !== 'ENOENT') console.error('[krafen-overlay] Не удалось удалить файл:', err);
+    }
+  }
+
+  /* Записать блок целиком. Система вправе принять за один раз только часть блока —
+     тогда остаток дописывается; иначе в файле молча не хватило бы куска. */
+  async function writeAll(handle, block) {
+    let done = 0;
+    while (done < block.length) {
+      const { bytesWritten } = await handle.write(block, done, block.length - done);
+      if (bytesWritten <= 0) throw new Error('Диск не принял данные файла');
+      done += bytesWritten;
     }
   }
 
@@ -68,7 +77,7 @@ export function createMediaStorage({ dir, now = Date.now } = {}) {
     let found = null;
     let refusal = null;
 
-    const tooLarge = (kind) => new AppError('file_too_large', 413, { kind, limit: Math.floor(limitFor(kind) / MB) });
+    const tooLarge = (kind) => new AppError('file_too_large', 413, { kind, limitBytes: limitFor(kind) });
 
     // Первые байты набрались (или файл кончился раньше) — выясняем, что это
     async function recognise() {
@@ -81,8 +90,10 @@ export function createMediaStorage({ dir, now = Date.now } = {}) {
         refusal = tooLarge(found.kind);
         return;
       }
-      handle = await fs.promises.open(tmpPath, 'wx', 0o600);
-      await handle.write(head);
+      // «wx+»: файл создаётся заново (существующий не перезаписывается) и открыт и на запись,
+      // и на чтение — после приёма из него читаются размеры JPEG
+      handle = await fs.promises.open(tmpPath, 'wx+', 0o600);
+      await writeAll(handle, head);
     }
 
     try {
@@ -110,7 +121,7 @@ export function createMediaStorage({ dir, now = Date.now } = {}) {
         } else if (total > limitFor(found.kind)) {
           refusal = tooLarge(found.kind);
         } else {
-          await handle.write(chunk);
+          await writeAll(handle, chunk);
         }
       }
 

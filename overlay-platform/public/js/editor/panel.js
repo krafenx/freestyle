@@ -1,8 +1,8 @@
-import { formatBytes } from '../core/format.js';
 import { el, icon } from '../scene/dom.js';
 import { isShown } from '../scene/schema.js';
 import { sourceType } from '../scene/sources/index.js';
 import { ICONS } from './icons.js';
+import { describeFile } from './library.js';
 
 /* ==========================================================================
    Панель свойств выбранного источника.
@@ -239,7 +239,11 @@ export function createPanel({ store, body, empty, onPickFile, onDelete, onDuplic
     return labeled(label, input, { hint, readout: counter });
   }
 
-  // Время отсчёта: часы, минуты, секунды → одно число секунд
+  /* Время отсчёта: часы, минуты, секунды → одно число секунд.
+     Три поля — одно значение. Пока человек не вышел из всей группы, набранное в соседних
+     полях остаётся как есть. Иначе «5 мин 0 с» нельзя было бы превратить в «0 мин 30 с»
+     по порядку, слева направо: ноль минут при нуле секунд — недопустимое время, и поле
+     минут возвращалось бы к пяти, едва человек переходил к секундам. */
   function durationInput({ label, min, max, get, set, hint }) {
     const wrap = el('div', 'field');
     const title = el('div', 'field-label', label);
@@ -259,6 +263,7 @@ export function createPanel({ store, body, empty, onPickFile, onDelete, onDuplic
       grid.append(cell);
       return { input, top };
     });
+    const editing = () => grid.contains(document.activeElement);
     const read = () => {
       const [h, m, s] = parts.map(({ input, top }) => Math.min(top, Math.max(0, Math.round(Number(input.value)) || 0)));
       return h * 3600 + m * 60 + s;
@@ -266,24 +271,36 @@ export function createPanel({ store, body, empty, onPickFile, onDelete, onDuplic
     const write = (total) => {
       const values = [Math.floor(total / 3600), Math.floor((total % 3600) / 60), total % 60];
       parts.forEach(({ input }, index) => {
-        if (idle(input)) input.value = String(values[index]);
+        input.value = String(values[index]);
       });
+    };
+    // Человек закончил: поля показывают то, что сохранено (недопустимое время не применялось), правка уходит сразу
+    const settle = () => {
+      const source = current();
+      if (!source || !grid.isConnected) return;
+      write(get(source));
+      store.flush();
     };
     for (const { input } of parts) {
       input.addEventListener('input', () => {
         const total = read();
         if (total >= min && total <= max) set(total, TYPING);
       });
-      input.addEventListener('blur', () => {
-        const source = current();
-        if (!source || !input.isConnected) return;
-        write(get(source));
-        store.flush();
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') settle();
       });
     }
+    grid.addEventListener('focusout', () => {
+      // Куда перешёл человек, станет известно, когда переход завершится: в соседнее поле группы — продолжаем ждать
+      setTimeout(() => {
+        if (!editing()) settle();
+      }, 0);
+    });
     wrap.append(title, grid);
     if (hint) wrap.append(el('div', 'field-hint', hint));
-    syncers.push((source) => write(get(source)));
+    syncers.push((source) => {
+      if (!editing()) write(get(source));
+    });
     return wrap;
   }
 
@@ -469,8 +486,7 @@ export function createPanel({ store, body, empty, onPickFile, onDelete, onDuplic
         thumb.append(img);
       }
       name.textContent = file.name; // как текст
-      const size = file.width && file.height ? ` · ${file.width} × ${file.height}` : '';
-      meta.textContent = `${file.mime.split('/')[1].toUpperCase()}${size} · ${formatBytes(file.size)}`;
+      meta.textContent = describeFile(file);
     });
     return details;
   }

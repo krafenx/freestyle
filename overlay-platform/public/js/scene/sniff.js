@@ -18,6 +18,14 @@ export const ACCEPTED_FORMATS = Object.freeze(['PNG', 'JPEG', 'WebP', 'GIF', 'MP
 // Что подставить в окно выбора файла. Это лишь подсказка браузеру, а не проверка
 export const ACCEPT_ATTRIBUTE = 'image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm';
 
+/* Название формата по типу файла, который хранит сервер, — то же написание, что в подсказках
+   и отказах: «WebP» и «WebM», а не «WEBP» и «WEBM». Для незнакомого типа — пустая строка. */
+const FORMAT_BY_MIME = new Map([
+  ['image/png', 'PNG'], ['image/jpeg', 'JPEG'], ['image/webp', 'WebP'],
+  ['image/gif', 'GIF'], ['video/mp4', 'MP4'], ['video/webm', 'WebM'],
+]);
+export const formatName = (mime) => FORMAT_BY_MIME.get(mime) ?? '';
+
 const ascii = (bytes, from, length) => {
   let text = '';
   for (let i = from; i < from + length && i < bytes.length; i += 1) text += String.fromCharCode(bytes[i]);

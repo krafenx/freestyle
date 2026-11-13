@@ -74,7 +74,7 @@
       </div>
 
       <div class="notice-box" id="ws-note">
-        Сцена появится у площадки на <strong>этапе 5</strong>, ссылка для OBS — на этапе 6.
+        Сцену пока видно только в редакторе. Ссылка для OBS появится на <strong>этапе 6</strong>.
       </div>
 
       <button class="btn-action" type="button" data-atmo-toggle aria-pressed="false">
@@ -104,6 +104,25 @@
       </div>
 
       <div class="stack-lg" id="state-ready" hidden>
+        <!-- Сцена: вход в редактор. Виден и владельцу, и модератору -->
+        <section class="glass pad-card" aria-labelledby="scene-title">
+          <div class="row between top">
+            <div>
+              <div class="card-label">сцена</div>
+              <h2 class="settings-title" id="scene-title">Сцена оверлея</h2>
+            </div>
+            <span class="status-badge muted">1920 × 1080</span>
+          </div>
+          <p class="settings-text">
+            У площадки одна сцена. В редакторе на неё ставят текст, картинки, GIF, видео, фигуры,
+            таймеры и виджеты; каждая правка сохраняется сразу и видна всей команде.
+          </p>
+          <div class="form-actions">
+            <!-- Адрес подставляет workspace.js: страница одна на все площадки -->
+            <a class="btn-primary sm" id="editor-link" href="/app">Открыть редактор</a>
+          </div>
+        </section>
+
         <!-- Команда -->
         <section class="glass pad-card" aria-labelledby="team-title">
           <div class="row between top">

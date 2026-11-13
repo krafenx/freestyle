@@ -35,6 +35,8 @@ export const DEFAULT_SCENE_LIMITS = Object.freeze({
   imageMaxPixels: 40_000_000,
   uploadsAtOncePerUser: 2,
   uploadsAtOnce: 8,
+  // За это время не пришло ни байта файла — связь потеряна: загрузка обрывается и освобождает место
+  uploadIdleMs: 60 * 1000,
   // Защита от скриптов: человек столько не нажимает
   commandsPerUser: { limit: 600, windowMs: 60 * 1000 },
   uploadsPerUser: { limit: 60, windowMs: 10 * 60 * 1000 },
@@ -612,7 +614,7 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
       throw new AppError('files_limit', 409, { limit: rules.filesPerWorkspace });
     }
     if (used.bytes + bytes > rules.storageBytesPerWorkspace) {
-      throw new AppError('storage_limit', 409, { limit: Math.floor(rules.storageBytesPerWorkspace / MB) });
+      throw new AppError('storage_limit', 409, { limitBytes: rules.storageBytesPerWorkspace });
     }
     if (sql.totalBytes.get().bytes + bytes > rules.storageBytesTotal) {
       throw new AppError('server_storage_full', 507);
@@ -631,7 +633,7 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
     try {
       assertNotTooOften(key, rules.uploadsPerUser);
       if (Number.isFinite(declared) && declared > largestFile) {
-        throw new AppError('file_too_large', 413, { limit: Math.floor(largestFile / MB) });
+        throw new AppError('file_too_large', 413, { limitBytes: largestFile });
       }
       // Места уже нет — незачем принимать файл, чтобы потом его выбросить
       assertRoomForFile(ws.rowId, Number.isFinite(declared) && declared > 0 ? declared : 1);
@@ -724,6 +726,15 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
     });
   }
 
+  /* Остановка сервера: соединения уже закрыты, и оборванным загрузкам нужно мгновение,
+     чтобы убрать за собой недокачанные файлы. Ждём их, но недолго. */
+  async function settle(timeoutMs = 2000) {
+    const deadline = Date.now() + timeoutMs;
+    while (uploadingTotal > 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
   return {
     get,
     createSource,
@@ -737,5 +748,7 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
     openMedia,
     forgetWorkspace,
     cleanup,
+    settle,
+    uploadIdleMs: rules.uploadIdleMs,
   };
 }

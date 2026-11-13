@@ -3,7 +3,7 @@
    тексты ошибок и безопасное возвращение на нужную страницу после входа.
    ========================================================================== */
 import { apiFetch } from './api.js';
-import { countOf, plural } from './format.js';
+import { countOf, formatBytes, plural } from './format.js';
 
 /* Запрос к серверу, который не бросает исключений: обрыв связи превращается
    в обычный ответ с кодом network. Так форме не нужно ловить ошибки отдельно. */
@@ -104,9 +104,9 @@ const MESSAGES = {
   media_in_use: (data) =>
     `Файл показывается на сцене (${countOf(data.count, ['источник', 'источника', 'источников'])}). Сначала уберите его оттуда.`,
   files_limit: (data) => `На площадке уже ${countOf(data.limit, ['файл', 'файла', 'файлов'])} — больше нельзя. Удалите ненужные.`,
-  storage_limit: (data) => `Не хватает места: на файлы одной площадки даётся ${data.limit} МБ. Удалите ненужные.`,
+  storage_limit: (data) => `Не хватает места: на файлы одной площадки даётся ${formatBytes(data.limitBytes)}. Удалите ненужные.`,
   server_storage_full: 'На сервере закончилось место для файлов. Сообщите об этом тому, кто его обслуживает.',
-  file_too_large: (data) => `Файл слишком большой: можно не больше ${data.limit} МБ.`,
+  file_too_large: (data) => `Файл слишком большой: можно не больше ${formatBytes(data.limitBytes)}.`,
   file_type_not_allowed: 'Такой файл не подходит. Принимаются PNG, JPEG, WebP, GIF, MP4 и WebM.',
   file_empty: 'Файл пустой.',
   file_required: 'Файл не дошёл до сервера. Попробуйте загрузить его ещё раз.',
@@ -119,7 +119,9 @@ const MESSAGES = {
 
 /* Текст ошибки для человека по ответу сервера. */
 export function describeError(res) {
-  const text = MESSAGES[res?.data?.error];
+  const code = res?.data?.error;
+  // Текст ищется только среди перечисленных выше: «toString» и подобные слова — не код отказа
+  const text = typeof code === 'string' && Object.prototype.hasOwnProperty.call(MESSAGES, code) ? MESSAGES[code] : undefined;
   if (typeof text === 'function') return text(res.data);
   if (text) return text;
   if (res?.status >= 500) return MESSAGES.server_error;

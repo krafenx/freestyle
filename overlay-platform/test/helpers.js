@@ -52,7 +52,8 @@ export async function startServer(options = {}) {
     baseUrl: `http://127.0.0.1:${port}`,
     db: server.db.raw,
     async stop({ keepFiles = false } = {}) {
-      await server.stop();
+      // Незавершённым запросам (проверка упала посреди загрузки файла) — четверть секунды, не больше
+      await server.stop({ graceMs: 250 });
       if (!keepFiles) fs.rmSync(tmpDir, { recursive: true, force: true });
     },
   };

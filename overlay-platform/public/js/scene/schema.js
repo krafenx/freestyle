@@ -81,10 +81,11 @@ export const FIELD_KINDS = Object.freeze(Object.keys(CHECKS));
 
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 
-// Одно значение: { ok: true, value } — уже приведённое к аккуратному виду, либо { ok: false }
+// Одно значение: { ok: true, value } — уже приведённое к аккуратному виду, либо { ok: false }.
+// Вид поля ищется только среди перечисленных выше: «toString» и подобные названия — не вид поля
 export function checkValue(field, value) {
-  const check = CHECKS[field?.kind];
-  return check ? check(field, value) : FAIL;
+  const kind = field?.kind;
+  return typeof kind === 'string' && own(CHECKS, kind) ? CHECKS[kind](field, value) : FAIL;
 }
 
 // Настройки по умолчанию: то, с чем источник появляется на сцене

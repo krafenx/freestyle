@@ -1,7 +1,7 @@
 import { countOf, formatBytes } from '../core/format.js';
 import { describeError } from '../core/session.js';
 import { el, icon } from '../scene/dom.js';
-import { ACCEPT_ATTRIBUTE, HEAD_BYTES, sniffFile } from '../scene/sniff.js';
+import { ACCEPT_ATTRIBUTE, HEAD_BYTES, formatName, sniffFile } from '../scene/sniff.js';
 import { sourceType } from '../scene/sources/index.js';
 import { ICONS } from './icons.js';
 
@@ -16,6 +16,12 @@ import { ICONS } from './icons.js';
 const KIND_TITLES = { image: 'Картинки', gif: 'GIF', video: 'Видео' };
 const KIND_ONE = { image: 'картинка', gif: 'GIF', video: 'видео' };
 const KEEP_DONE_MS = 4000; // сколько строка удачной загрузки остаётся в списке
+
+// Подпись файла: «WebM · 1,2 МБ», «PNG · 320 × 180 · 4 КБ». Одна и та же в окне файлов и в свойствах источника
+export function describeFile(file) {
+  const size = file.width && file.height ? `${file.width} × ${file.height}` : '';
+  return [formatName(file.mime), size, formatBytes(file.size)].filter(Boolean).join(' · ');
+}
 
 export function createLibrary({ store, els, show, hide, notify, confirm, onPicked, onUploaded, onUploadsChange }) {
   let pickFor = null; // номер источника, для которого выбирают файл; null — просто список
@@ -50,12 +56,6 @@ export function createLibrary({ store, els, show, hide, notify, confirm, onPicke
   /* ---------- Список файлов ---------- */
   const usedBy = (fileId) => store.state.sources.filter((source) => source.file === fileId).length;
 
-  function describe(file) {
-    const format = file.mime.split('/')[1].toUpperCase();
-    const size = file.width && file.height ? ` · ${file.width} × ${file.height}` : '';
-    return `${format}${size} · ${formatBytes(file.size)}`;
-  }
-
   function tile(file) {
     const item = el('li', 'file-tile');
     const thumb = el('div', 'file-thumb large');
@@ -74,7 +74,7 @@ export function createLibrary({ store, els, show, hide, notify, confirm, onPicke
     const info = el('div', 'file-info');
     info.append(
       el('div', 'file-name', file.name), // название — как текст
-      el('div', 'file-meta', describe(file)),
+      el('div', 'file-meta', describeFile(file)),
       el('div', 'file-meta', used > 0 ? `на сцене: ${countOf(used, ['источник', 'источника', 'источников'])}` : 'на сцене не используется')
     );
 

@@ -623,33 +623,6 @@ main {
   box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.65);
 }
 
-.stage-placeholder {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 20px;
-  text-align: center;
-}
-
-.stage-placeholder .big {
-  font-family: var(--font-display);
-  font-size: clamp(24px, 3.4vw, 38px);
-  letter-spacing: 0.08em;
-  color: rgba(224, 224, 224, 0.45);
-}
-
-.stage-placeholder p {
-  max-width: 360px;
-  font-family: var(--font-serif);
-  font-style: italic;
-  font-size: 16px;
-  color: var(--silver);
-}
-
 /* Образец текста поверх «прозрачной» сцены */
 .text-sample {
   position: absolute;
@@ -893,16 +866,22 @@ a.user-chip:hover {
   gap: 12px;
   min-width: 0;
   padding: 22px;
-  color: inherit;
-  text-decoration: none;
 }
 
 .workspace-card-name {
+  align-self: flex-start;
+  max-width: 100%;
   font-family: var(--font-heading);
   font-size: 24px;
   line-height: 1.2;
   color: #fff;
+  text-decoration: none;
   overflow-wrap: anywhere;
+  transition: color 0.3s var(--ease);
+}
+
+.workspace-card-name:hover {
+  color: var(--crimson-light);
 }
 
 .workspace-card-meta {
@@ -914,17 +893,12 @@ a.user-chip:hover {
   overflow-wrap: anywhere;
 }
 
-.workspace-card-open {
-  font-size: 9px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--silver-dim);
-  transition: color 0.3s var(--ease);
-}
-
-.workspace-card:hover .workspace-card-open,
-.workspace-card:focus-visible .workspace-card-open {
-  color: var(--crimson-light);
+.workspace-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
 }
 
 /* ---------- Страница площадки (/app/w/…) ---------- */
@@ -993,21 +967,6 @@ a.user-chip:hover {
   font-weight: 500;
   color: #fff;
   overflow-wrap: anywhere;
-}
-
-/* Три колонки будущего редактора: слои · сцена · свойства */
-.studio-skeleton {
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 260px;
-  gap: 16px;
-  align-items: stretch;
-}
-
-.studio-col {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
 }
 
 /* ---------- Нижний док ---------- */
@@ -1210,12 +1169,6 @@ footer.site-footer .foot-brand {
 }
 
 /* ---------- Адаптивность ---------- */
-@media (max-width: 1180px) {
-  .studio-skeleton {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 1100px) {
   .rail,
   .rail-line,

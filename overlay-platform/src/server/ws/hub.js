@@ -195,13 +195,19 @@ export function createRealtimeHub(httpServer, {
   });
 
   /* На площадке что-то изменилось — сообщаем её открытым страницам. Само сообщение
-     данных не несёт: страница, получив его, заново запрашивает площадку обычным
-     запросом, где права проверяются как всегда.
+     данных не несёт: страница, получив его, заново запрашивает площадку или сцену
+     обычным запросом, где права проверяются как всегда.
      audience: team — всем участникам, owner — только владельцу.
+     Для сцены к сообщению прикладываются номер её версии и метка страницы, с которой
+     пришло изменение: по ним страница понимает, отстала ли она и не её ли это правка.
      Возвращает число страниц, которым сообщение ушло. */
-  function announceWorkspace({ workspaceId, what, audience = 'team', actorId = null }) {
+  function announceWorkspace({ workspaceId, what, audience = 'team', actorId = null, version = null, origin = null }) {
     const members = channels.get(workspaceChannel(workspaceId));
     if (!members) return 0;
+
+    const extra = {};
+    if (Number.isInteger(version)) extra.version = version;
+    if (typeof origin === 'string' && origin) extra.origin = origin;
 
     let delivered = 0;
     for (const ws of [...members]) {
@@ -215,7 +221,7 @@ export function createRealtimeHub(httpServer, {
       }
       if (audience === 'owner' && role !== 'owner') continue;
       // mine — изменение сделал сам этот человек (в этой или другой вкладке)
-      safeSend(ws, { type: 'workspace:changed', what, mine: actorId !== null && meta.userId === actorId });
+      safeSend(ws, { type: 'workspace:changed', what, mine: actorId !== null && meta.userId === actorId, ...extra });
       delivered += 1;
     }
     return delivered;

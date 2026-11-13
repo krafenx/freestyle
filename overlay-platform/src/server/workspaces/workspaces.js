@@ -11,7 +11,7 @@ import { cleanLine, lengthOf } from '../text.js';
      владелец  — создал площадку; он один. Переименовывает и удаляет площадку,
                  приглашает и убирает модераторов;
      модератор — вошёл по приглашению. Видит площадку и её команду, может сам
-                 выйти из неё. Со сценой работает наравне с владельцем (этап 5).
+                 выйти из неё. Со сценой работает наравне с владельцем.
 
    Права проверяются здесь, при каждом действии: страница лишь прячет кнопки,
    которые человеку недоступны. Посторонний получает на любой запрос один и тот
@@ -40,7 +40,7 @@ const iso = (ms) => new Date(ms).toISOString();
 const sameName = (a, b) => a.toLowerCase() === b.toLowerCase();
 const hashInviteToken = (token) => sha256Hex(`invite:${token}`);
 
-export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = null } = {}) {
+export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = null, onRemoved = null } = {}) {
   const rules = { ...DEFAULT_WORKSPACE_LIMITS, ...limits };
   const limiter = createRateLimiter({ now });
   const transaction = (work) => inTransaction(db, work);
@@ -161,6 +161,14 @@ export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = n
   // То же, но с отказом для постороннего
   function requireMember({ userId, workspaceId } = {}) {
     return access(userId, workspaceId).role;
+  }
+
+  /* Вход в площадку для остальных разделов сервера (сцена, файлы). Вопрос тот же —
+     «кем этот человек приходится площадке» — и ответ для постороннего тот же.
+     Так у сцены нет собственной проверки прав, которая могла бы разойтись с этой. */
+  function enter({ userId, workspaceId } = {}) {
+    const row = access(userId, workspaceId);
+    return { rowId: row.id, publicId: row.public_id, name: row.name, role: row.role };
   }
 
   function assertNotTooOften(key, rule) {
@@ -304,8 +312,15 @@ export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = n
     if (!sameName(cleanLine(confirmName), row.name)) {
       throw new AppError('confirm_name_mismatch', 400, { field: 'confirmName' });
     }
-    sql.deleteWorkspace.run(row.id); // модераторы и приглашения уходят вместе с площадкой
+    sql.deleteWorkspace.run(row.id); // модераторы, приглашения, источники и записи о файлах уходят вместе с площадкой
     announce(row.public_id, 'deleted', { actorId: userId });
+    // Сами файлы площадки лежат на диске — их убирает тот, кто ими ведает. Площадка уже
+    // удалена: сбой при уборке не должен превращать удаление в ошибку
+    try {
+      onRemoved?.(row.public_id);
+    } catch (err) {
+      console.error('[krafen-overlay] Не удалось убрать файлы удалённой площадки:', err);
+    }
     return { deleted: { id: row.public_id, name: row.name } };
   }
 
@@ -462,6 +477,7 @@ export function createWorkspaces({ db, now = Date.now, limits = {}, onChange = n
     get,
     roleOf,
     requireMember,
+    enter,
     rename,
     remove,
     removeMember,

@@ -9,7 +9,8 @@ import { safeNextPath } from '../src/server/auth/http.js';
 import { isLinkToken, newLinkToken, sha256Hex } from '../src/server/auth/tokens.js';
 import { openDatabase } from '../src/server/db/database.js';
 import {
-  DAY, FAST, GOOD_PASSWORD, MINUTE, PROJECT_DIR, createVisitor, openSocket, registerUser, startServer,
+  DAY, FAST, GOOD_PASSWORD, LATEST_MIGRATION, MINUTE, PLATFORM_STAGE, PROJECT_DIR, SCHEMA_VERSION,
+  createVisitor, openSocket, registerUser, startServer,
 } from './helpers.js';
 
 /* Этап 4: площадки и роли. Проверяется настоящий сервер с настоящей базой:
@@ -1640,9 +1641,10 @@ describe('Этап 4 — обновление с прошлого этапа', (
       const ctx = await startServer({ tmpDir });
       try {
         const health = (await createVisitor(ctx.baseUrl).get('/api/health')).data;
-        assert.equal(health.db.schemaVersion, 3);
-        assert.equal(health.db.latestMigration, '003_workspaces');
-        assert.equal(health.stage, 4);
+        // Сервер достроил базу до нынешнего состояния — через все обновления, которых в ней не было
+        assert.equal(health.db.schemaVersion, SCHEMA_VERSION);
+        assert.equal(health.db.latestMigration, LATEST_MIGRATION);
+        assert.equal(health.stage, PLATFORM_STAGE);
 
         // Прежний вход действует: человек не заметил обновления
         const visitor = createVisitor(ctx.baseUrl);

@@ -110,7 +110,11 @@ export function createAuthHttp({ accounts, cookies }) {
     userAgent: req.headers['user-agent'],
     replaceSessionId: req.auth?.sessionId,
   });
-  const common = [noStore, requireJson, express.json({ limit: '16kb' }), loadSession];
+  /* Общий порядок для адресов /api: ответ не запоминается, команды только в JSON
+     и не длиннее limit, затем узнаём человека. Предел по умолчанию мал намеренно:
+     команды аккаунта и площадок короткие. */
+  const sessionWithBody = (limit) => [noStore, requireJson, express.json({ limit }), loadSession];
+  const common = sessionWithBody('16kb');
 
   /* ---------- /api/auth ---------- */
   const authRouter = express.Router();
@@ -211,8 +215,10 @@ export function createAuthHttp({ accounts, cookies }) {
   return {
     authRouter,
     accountRouter,
-    // То же самое для остальных разделов /api: узнать человека, потребовать вход, ответить отказом
-    api: { session: common, requireAuth, reply },
+    /* То же самое для остальных разделов /api: узнать человека, потребовать вход, ответить отказом.
+       sessionWithBody — для разделов с более длинными командами (редактор сцены);
+       identify — только узнать человека, не читая тело запроса (загрузка и выдача файлов). */
+    api: { session: common, sessionWithBody, identify: [noStore, loadSession], requireAuth, reply },
     pageSession: [noStore, loadSession],
     requireLoginPage,
     guestOnlyPage,

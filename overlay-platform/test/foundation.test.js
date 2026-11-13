@@ -4,14 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import { createOverlayServer } from '../src/server/app.js';
-import { openSocket } from './helpers.js';
+import { SCHEMA_VERSION, openSocket } from './helpers.js';
 
 /* Этап 2: проверяем, что основа платформы действительно работает,
    а не просто «лежит в папке»: сервер, база, живой канал связи,
-   страницы, стили, скрипты и шрифты. Вход и аккаунты — в auth.test.js. */
-
-// Обновления структуры базы, которые должны быть применены к этому моменту
-const SCHEMA_VERSION = 3;
+   страницы, стили, скрипты и шрифты. Вход и аккаунты — в auth.test.js.
+   Сколько обновлений структуры базы должно быть применено — SCHEMA_VERSION в helpers.js. */
 
 function makeServer(tmpDir) {
   return createOverlayServer({

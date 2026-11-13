@@ -1,0 +1,1181 @@
+/* ==========================================================================
+   Редактор сцены (/app/w/<площадка>/editor): слои · сцена · свойства,
+   окно файлов и окно нового источника.
+
+   Широкий экран — три колонки во всю высоту окна: панели прокручиваются сами,
+   сцена всегда на виду. Средний — сцена сверху, под ней слои и свойства рядом.
+   Телефон — сцена сверху (она остаётся на экране при прокрутке), под ней
+   слои и свойства по очереди.
+
+   Как выглядят сами источники, описано в scene.css — общем с оверлеем для OBS.
+   ========================================================================== */
+
+:root {
+  --editor-nav: 68px; /* высота шапки сайта: под ней останавливается «прилипшая» сцена */
+}
+
+.editor-layout {
+  max-width: 1760px;
+  margin: 0 auto;
+  padding: 84px 24px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Содержимое лежит над слоями атмосферы. У сетки редактора своего слоя нет намеренно:
+   сцена внутри неё поднимается выше зерна (см. .stage-col), а панели остаются под ним */
+.editor-layout > * {
+  position: relative;
+  z-index: var(--z-content);
+}
+
+.editor-layout > .editor-grid {
+  z-index: auto;
+}
+
+/* ---------- Шапка редактора ---------- */
+.editor-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding: 12px 18px;
+}
+
+.editor-heading {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.editor-name {
+  margin-top: 2px;
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: 20px;
+  line-height: 1.25;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
+.editor-bar-side,
+.editor-bar-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.editor-bar-actions {
+  gap: 10px;
+}
+
+/* ---------- Сетка: слои · сцена · свойства ---------- */
+.editor-grid {
+  display: grid;
+  grid-template-columns: 268px minmax(0, 1fr) 328px;
+  gap: 14px;
+  align-items: start;
+}
+
+/* Атрибут hidden должен побеждать display: grid */
+.editor-grid[hidden] {
+  display: none;
+}
+
+.editor-panel {
+  z-index: var(--z-content);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.panel-title {
+  font-family: var(--font-heading);
+  font-weight: 400;
+  font-size: 18px;
+  line-height: 1.25;
+  color: #fff;
+}
+
+.panel-foot {
+  margin-top: 0;
+}
+
+.editor-panel .list-empty {
+  margin-top: 0;
+  line-height: 1.6;
+}
+
+/* Переключатель «Слои / Свойства» нужен только на узком экране */
+.panel-switch {
+  display: none;
+  position: relative;
+  z-index: var(--z-content);
+  gap: 8px;
+}
+
+.panel-switch .filter-pill {
+  flex: 1 1 0;
+  justify-content: center;
+  padding: 11px 16px;
+}
+
+/* ---------- Сцена ---------- */
+.stage-col {
+  position: relative;
+  /* Выше зерна: сцена в редакторе выглядит точно так же, как в эфире */
+  z-index: calc(var(--z-grain) + 1);
+  min-width: 0;
+}
+
+.stage-card {
+  padding: 12px;
+  background: rgba(10, 10, 13, 0.97);
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  /* Сцена целиком помещается по высоте окна */
+  max-width: max(240px, calc((100vh - 250px) * 16 / 9));
+  margin: 0 auto;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Углы сцены прямые: в эфир она попадает прямоугольником, и срезанный угол скрыл бы то, что там стоит */
+.stage .stage-preview-frame {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.stage:focus-visible {
+  outline: none;
+}
+
+.stage:focus-visible .stage-preview-frame {
+  border-color: rgba(255, 122, 122, 0.65);
+  box-shadow: 0 0 0 3px rgba(124, 10, 10, 0.3);
+}
+
+.stage .kf-scene {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.stage.dragging,
+.stage.dragging .sel-box {
+  cursor: grabbing;
+}
+
+/* Слой выделения: рамка выбранного источника, ручки и линии привязки.
+   Считается в точках экрана, поэтому ручки одного размера при любом масштабе сцены */
+.stage-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.sel-box {
+  position: absolute;
+  border: 1px solid var(--crimson-light);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.7),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.45);
+  cursor: move;
+  pointer-events: auto;
+  /* Палец на выбранном источнике двигает его, а не прокручивает страницу */
+  touch-action: none;
+}
+
+.sel-box[hidden] {
+  display: none;
+}
+
+/* Защищённый и скрытый источник не двигается: рамка только показывает, где он */
+.sel-box.locked,
+.sel-box.unseen {
+  border-style: dashed;
+  border-color: rgba(224, 224, 224, 0.75);
+  cursor: default;
+  pointer-events: none;
+  touch-action: auto;
+}
+
+.sel-box.locked .sel-handle,
+.sel-box.unseen .sel-handle {
+  display: none;
+}
+
+.sel-handle {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--crimson-bright);
+  border-radius: 2px;
+  background: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.55);
+  touch-action: none;
+}
+
+/* Невидимое поле вокруг ручки: попасть в неё проще, чем в сам квадратик */
+.sel-handle::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+}
+
+.sel-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; }
+.sel-handle.n { top: -6px; left: 50%; margin-left: -6px; cursor: ns-resize; }
+.sel-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; }
+.sel-handle.e { top: 50%; right: -6px; margin-top: -6px; cursor: ew-resize; }
+.sel-handle.se { bottom: -6px; right: -6px; cursor: nwse-resize; }
+.sel-handle.s { bottom: -6px; left: 50%; margin-left: -6px; cursor: ns-resize; }
+.sel-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+.sel-handle.w { top: 50%; left: -6px; margin-top: -6px; cursor: ew-resize; }
+
+.sel-box.small .sel-handle.n,
+.sel-box.small .sel-handle.e,
+.sel-box.small .sel-handle.s,
+.sel-box.small .sel-handle.w {
+  display: none;
+}
+
+/* Размер источника — виден, пока его тянут */
+.sel-size {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-top: 10px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(5, 5, 5, 0.9);
+  border: 1px solid rgba(255, 122, 122, 0.5);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  color: #fff;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.stage.dragging .sel-size {
+  display: block;
+}
+
+.snap-line {
+  position: absolute;
+  background: var(--crimson-light);
+  box-shadow: 0 0 6px rgba(255, 122, 122, 0.8);
+  pointer-events: none;
+}
+
+.snap-line[hidden] {
+  display: none;
+}
+
+.snap-line.vertical {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.snap-line.horizontal {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+/* Подсказка, когда над сценой держат файл */
+.stage-drop {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border: 2px dashed rgba(255, 122, 122, 0.7);
+  background: rgba(40, 6, 6, 0.72);
+  font-size: 13px;
+  line-height: 1.5;
+  color: #fff;
+  text-align: center;
+  pointer-events: none;
+}
+
+.stage.dropping .stage-drop {
+  display: flex;
+}
+
+.stage-foot {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 10px;
+}
+
+.stage-foot .kv-inline {
+  flex: none;
+  white-space: nowrap;
+}
+
+.stage-help {
+  flex: 1 1 260px;
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--label);
+}
+
+/* Подсказка своя для мыши и для пальца */
+.help-touch {
+  display: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .help-mouse {
+    display: none;
+  }
+  .help-touch {
+    display: inline;
+  }
+}
+
+/* ---------- Слои ---------- */
+.layer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-gap {
+  flex: 1 1 auto;
+}
+
+.icon-btn.tool {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.icon-btn.tool.danger:hover {
+  color: var(--danger-text);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.icon-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+  transform: none;
+}
+
+.icon-btn:disabled:hover {
+  border-color: var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--silver-bright);
+}
+
+.layer-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 4px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.025);
+  transition:
+    border-color 0.2s var(--ease),
+    background-color 0.2s var(--ease);
+}
+
+.layer-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.layer-row.selected {
+  border-color: rgba(163, 19, 19, 0.65);
+  background: rgba(124, 10, 10, 0.22);
+}
+
+.layer-pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 6px 10px 11px;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--silver-bright);
+  text-align: left;
+  cursor: pointer;
+}
+
+.layer-pick .ico {
+  color: var(--silver-dim);
+}
+
+.layer-row.selected .layer-pick,
+.layer-row.selected .layer-pick .ico {
+  color: #fff;
+}
+
+.layer-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Скрытый из эфира источник в списке приглушён */
+.layer-row.unseen .layer-name {
+  color: var(--silver-dim);
+  font-style: italic;
+}
+
+.layer-flag {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  font-size: 14px;
+  color: var(--silver-dim);
+  cursor: pointer;
+  transition:
+    color 0.2s var(--ease),
+    background-color 0.2s var(--ease);
+}
+
+.layer-flag:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.layer-flag.eye[aria-pressed="true"] {
+  color: var(--silver-bright);
+}
+
+.layer-flag.lock[aria-pressed="true"] {
+  color: var(--crimson-light);
+}
+
+/* ---------- Свойства ---------- */
+.props-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.props-body[hidden] {
+  display: none;
+}
+
+.props-head {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.props-kind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--crimson-light);
+}
+
+.props-group {
+  border-top: 1px solid var(--line-subtle);
+  padding-top: 12px;
+}
+
+.props-group[hidden] {
+  display: none;
+}
+
+.props-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 0;
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--silver);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.props-group-title::-webkit-details-marker {
+  display: none;
+}
+
+.props-group-title::after {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  margin-right: 3px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.2s var(--ease);
+}
+
+.props-group[open] > .props-group-title::after {
+  transform: rotate(45deg);
+}
+
+.props-group-title:hover {
+  color: #fff;
+}
+
+.props-group-body {
+  padding-top: 12px;
+}
+
+.props-group-body .field {
+  margin-bottom: 14px;
+}
+
+.props-group-body .field:last-child {
+  margin-bottom: 0;
+}
+
+.props-group-body .field[hidden] {
+  display: none;
+}
+
+/* Текущее значение ползунка — справа от подписи */
+.field-value {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  font-size: 11px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--silver-bright);
+  white-space: nowrap;
+}
+
+.props-body .field-label {
+  letter-spacing: 0.16em;
+}
+
+.props-body .field-grid-4 {
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.props-body .field-grid-4 .field {
+  margin-bottom: 0;
+}
+
+.props-body .field-grid-4 .kf-input {
+  padding-left: 9px;
+  padding-right: 6px;
+}
+
+.props-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.props-actions:last-child {
+  margin-bottom: 0;
+}
+
+.props-actions .btn-action {
+  padding: 9px 13px;
+  letter-spacing: 0.12em;
+}
+
+.props-actions .btn-action[hidden] {
+  display: none;
+}
+
+.props-status {
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: #fff;
+}
+
+.props-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line-subtle);
+}
+
+.pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill-row[hidden] {
+  display: none;
+}
+
+.props-body .filter-pill {
+  padding: 8px 12px;
+  letter-spacing: 0.1em;
+}
+
+/* Многострочное поле в панели свойств — компактнее обычного */
+.kf-area.studio {
+  min-height: 84px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Код своего блока: моноширинно, без переноса строк */
+.kf-area.code {
+  min-height: 240px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  tab-size: 2;
+}
+
+/* Цвет: образец и код рядом */
+.color-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kf-color {
+  flex: none;
+  width: 40px;
+  height: 36px;
+  padding: 3px;
+  border: 1px solid var(--glass-border-strong);
+  border-radius: var(--radius-sm);
+  background: rgba(5, 5, 5, 0.6);
+  cursor: pointer;
+}
+
+.kf-color::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.kf-color::-webkit-color-swatch {
+  border: none;
+  border-radius: 7px;
+}
+
+.kf-color::-moz-color-swatch {
+  border: none;
+  border-radius: 7px;
+}
+
+.color-row .kf-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Время отсчёта: часы, минуты, секунды */
+.duration-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.duration-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.duration-cell .kf-input {
+  min-width: 0;
+  padding-left: 9px;
+  padding-right: 6px;
+}
+
+.duration-unit {
+  flex: none;
+  font-size: 11px;
+  color: var(--label);
+}
+
+/* ---------- Файл: карточка в свойствах и плитка в окне файлов ---------- */
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* Образец файла лежит на «шахматке»: видно, где у картинки прозрачность */
+.file-thumb {
+  position: relative;
+  flex: none;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid var(--line-subtle);
+  border-radius: 9px;
+  background-color: var(--checker-a);
+  background-image:
+    linear-gradient(45deg, var(--checker-b) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--checker-b) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--checker-b) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--checker-b) 75%);
+  background-size: 14px 14px;
+  background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+  font-size: 20px;
+  color: var(--silver);
+}
+
+.file-thumb.large {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  font-size: 30px;
+}
+
+/* Картинка занимает рамку образца целиком и вписывается в неё с сохранением пропорций */
+.file-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.file-info {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.file-name {
+  font-size: 13px;
+  line-height: 1.35;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--label);
+  overflow-wrap: anywhere;
+}
+
+.file-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(172px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.file-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+}
+
+.file-actions .btn-primary.sm,
+.file-actions .btn-action {
+  padding: 9px 14px;
+}
+
+/* ---------- Окна редактора ---------- */
+.modal-box.wide {
+  width: min(880px, 100%);
+}
+
+.type-grid {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
+  gap: 10px;
+}
+
+.type-tile {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.025);
+  font-family: var(--font-sans);
+  font-size: 20px; /* размер значка */
+  color: var(--crimson-light);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.25s var(--ease),
+    background-color 0.25s var(--ease);
+}
+
+.type-tile:hover {
+  border-color: rgba(163, 19, 19, 0.6);
+  background: rgba(124, 10, 10, 0.2);
+}
+
+.type-tile-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.type-tile-title {
+  font-size: 14px;
+  line-height: 1.3;
+  color: #fff;
+}
+
+.type-tile-about {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--silver);
+}
+
+.library-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 16px 24px;
+  align-items: start;
+}
+
+.library-usage {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.library-upload {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+
+.library-top + .pill-row,
+.upload-list + .pill-row {
+  margin-top: 16px;
+}
+
+/* Полоса: сколько места занято, сколько файла загружено */
+.meter {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.meter-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--crimson-bright);
+  transition: width 0.25s var(--ease);
+}
+
+.meter-fill.full {
+  background: var(--crimson-light);
+}
+
+.upload-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.upload-list[hidden] {
+  display: none;
+}
+
+.upload-row {
+  padding: 10px 12px;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.upload-row.error {
+  border-color: rgba(163, 19, 19, 0.5);
+  background: rgba(124, 10, 10, 0.14);
+}
+
+.upload-row.done .meter-fill {
+  background: var(--ok);
+}
+
+.upload-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 7px;
+  font-size: 12px;
+}
+
+.upload-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #fff;
+}
+
+.upload-state {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--silver);
+}
+
+.upload-message {
+  margin-top: 7px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--danger-text);
+}
+
+/* ---------- Широкий экран: редактор во всю высоту окна ---------- */
+@media (min-width: 1181px) and (min-height: 620px) {
+  .editor-layout {
+    height: 100vh;
+    height: 100dvh;
+    padding-bottom: 16px;
+  }
+
+  .editor-grid {
+    flex: 1 1 auto;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  /* Панели прокручиваются сами, не уводя сцену с экрана */
+  .editor-panel {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(160, 160, 160, 0.3) transparent;
+  }
+
+  /* Колонка сцены знает свою высоту — сцена вписывается в неё целиком */
+  .stage-col {
+    min-height: 0;
+    container-type: size;
+  }
+
+  .stage {
+    max-width: max(240px, calc((100cqh - 96px) * 16 / 9));
+  }
+}
+
+/* ---------- Средний экран: сцена сверху, слои и свойства под ней ---------- */
+@media (max-width: 1180px) {
+  .editor-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .stage-col {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+
+  .stage {
+    max-width: max(240px, calc(48vh * 16 / 9));
+  }
+}
+
+/* Сцена остаётся на экране, пока под ней прокручивают слои и свойства.
+   На совсем низком экране (телефон боком) она занимала бы его целиком — там не «прилипает» */
+@media (max-width: 1180px) and (min-height: 540px) {
+  .stage-col {
+    position: sticky;
+    top: var(--editor-nav);
+  }
+}
+
+@media (max-width: 980px) {
+  :root {
+    --editor-nav: 66px;
+  }
+
+  .editor-layout {
+    padding: 80px 16px 28px;
+  }
+}
+
+/* ---------- Телефон: слои и свойства по очереди ---------- */
+@media (max-width: 760px) {
+  .editor-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .panel-switch {
+    display: flex;
+  }
+
+  .editor-grid.show-layers .props-panel,
+  .editor-grid.show-props .layers-panel {
+    display: none;
+  }
+
+  .stage-card {
+    padding: 8px;
+  }
+
+  .stage-foot {
+    margin-top: 8px;
+  }
+
+  .library-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .type-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .file-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+}
+
+@media (max-width: 620px) {
+  .editor-layout {
+    padding: 76px 10px 24px;
+    gap: 12px;
+  }
+
+  .editor-bar {
+    padding: 12px 14px;
+  }
+
+  .editor-bar-actions {
+    flex: 1 1 100%;
+  }
+
+  .editor-bar-actions > * {
+    flex: 1 1 auto;
+  }
+
+  .editor-panel {
+    padding: 14px 12px;
+  }
+
+  /* 16px — порог, ниже которого iPhone сам увеличивает страницу при вводе */
+  .kf-area.studio,
+  .kf-area.code {
+    font-size: 16px;
+  }
+
+  .kf-area.code {
+    min-height: 200px;
+  }
+}
+
+/* Палец крупнее курсора: кнопки слоёв и ручки рамки — больше */
+@media (hover: none) and (pointer: coarse) {
+  .layer-flag {
+    width: 40px;
+    height: 40px;
+  }
+
+  .icon-btn.tool {
+    width: 40px;
+    height: 40px;
+  }
+
+  .layer-pick {
+    padding-top: 13px;
+    padding-bottom: 13px;
+  }
+
+  .sel-handle {
+    width: 15px;
+    height: 15px;
+  }
+
+  .sel-handle::before {
+    inset: -11px;
+  }
+
+  .sel-handle.nw { top: -8px; left: -8px; }
+  .sel-handle.n { top: -8px; margin-left: -8px; }
+  .sel-handle.ne { top: -8px; right: -8px; }
+  .sel-handle.e { right: -8px; margin-top: -8px; }
+  .sel-handle.se { bottom: -8px; right: -8px; }
+  .sel-handle.s { bottom: -8px; margin-left: -8px; }
+  .sel-handle.sw { bottom: -8px; left: -8px; }
+  .sel-handle.w { left: -8px; margin-top: -8px; }
+}

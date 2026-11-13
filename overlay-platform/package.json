@@ -11,7 +11,8 @@
     "start": "node --no-warnings=ExperimentalWarning src/server/index.js",
     "dev": "node --no-warnings=ExperimentalWarning --watch src/server/index.js",
     "test": "node --no-warnings=ExperimentalWarning --test --test-reporter=spec test/*.test.js",
-    "account": "node --no-warnings=ExperimentalWarning src/tools/account.js"
+    "account": "node --no-warnings=ExperimentalWarning src/tools/account.js",
+    "backup": "node --no-warnings=ExperimentalWarning src/tools/backup.js"
   },
   "dependencies": {
     "@fontsource/alice": "^5.3.0",

@@ -589,10 +589,10 @@ describe('Этап 7 — обновление с прошлого этапа', (
 describe('Этап 7 — страницы и документы рассказывают про правки на лету', () => {
   const readPublicPage = (name) => fs.readFileSync(path.join(PROJECT_DIR, 'public', name), 'utf8');
 
-  it('страницы называют текущим этап 8, а прошлый — прошлым', () => {
-    assert.match(readPublicPage('index.html'), /этап 8 из 9/);
-    assert.match(readPublicPage('app.html'), /<span class="mono">8 \/ 9<\/span>/);
-    assert.match(readPublicPage('app.html'), /этап 8 из 9 завершён/);
+  it('страницы называют текущим этап 9, а прошлый — прошлым', () => {
+    assert.match(readPublicPage('index.html'), /этап 9 из 9/);
+    assert.match(readPublicPage('app.html'), /<span class="mono">9 \/ 9<\/span>/);
+    assert.match(readPublicPage('app.html'), /этап 9 из 9 завершён/);
     assert.match(readPublicPage('app.html'), /Правки на лету в OBS и между модераторами/);
     // Ни одна страница и ни один скрипт больше не называют текущим этап 6
     const files = [];
@@ -610,7 +610,7 @@ describe('Этап 7 — страницы и документы рассказы
       /* Ищем только подпись о текущем этапе: «этап 7 из 9», «7 / 9» кнопкой кабинета.
          Упоминание «(этап 7)» в пояснении к коду — это история, и она полезна. */
       const text = fs.readFileSync(file, 'utf8');
-      assert.doesNotMatch(text, /этап 7 из 9|>7 \/ 9</i, path.relative(PROJECT_DIR, file));
+      assert.doesNotMatch(text, /этап 8 из 9|>8 \/ 9</i, path.relative(PROJECT_DIR, file));
     }
   });
 
@@ -626,10 +626,10 @@ describe('Этап 7 — страницы и документы рассказы
     assert.match(page, /изменил \$\{actor\.name\}/);
   });
 
-  it('оба README обещают «готов этап 8 из 9» и рассказывают про правки на лету', () => {
+  it('оба README обещают «этап 9 из 9» и рассказывают про правки на лету', () => {
     for (const name of ['README.md', '../README.md']) {
       const text = fs.readFileSync(path.join(PROJECT_DIR, name), 'utf8');
-      assert.match(text, /этап 8 из 9/, name);
+      assert.match(text, /этап 9 из 9/, name);
       assert.match(text, /[Пп]равки на лету/, name);
     }
   });

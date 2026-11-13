@@ -102,8 +102,17 @@ export function createOverlayServer(overrides = {}) {
      и она тоже проверяется перед каждой отправкой. */
   const realtime = createRealtimeHub(httpServer, {
     now: overrides.now,
-    guard: ({ workspaceId, userId, sessionId }) =>
-      (accounts.isSessionAlive(sessionId) ? workspaces.roleOf({ userId, workspaceId }) : null),
+    guard: Object.assign(
+      ({ workspaceId, userId, sessionId }) =>
+        /* sessionId === null — вопрос без привязки к соединению: так подписывается автор
+           правки («изменил Помощник»). Вход проверять не на чем, поэтому проверяются
+           только права; для живого соединения проверяется и вход. */
+        (!sessionId || accounts.isSessionAlive(sessionId) ? workspaces.roleOf({ userId, workspaceId }) : null),
+      /* Подпись участника — для присутствия на сцене («Модератор двигает: Заголовок»)
+         и для сигнала о правке («изменил Помощник»). Права при этом проверяются
+         той же guard: nameOf имени постороннему не выдаёт. */
+      { nameOf: ({ workspaceId, userId }) => workspaces.nameOf({ workspaceId, userId }) }
+    ),
     overlayGuard: (token) => workspaces.overlayTarget({ token }),
     ...overrides.realtimeLimits,
   });
@@ -168,7 +177,7 @@ export function createOverlayServer(overrides = {}) {
     res.json({
       ok: true,
       service: 'krafen-overlay-platform',
-      stage: 6,
+      stage: 7,
       serverTime: new Date().toISOString(),
       db: db.getHealth(),
       realtime: realtime.getStats(),

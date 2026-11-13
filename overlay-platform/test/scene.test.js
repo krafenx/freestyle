@@ -2202,10 +2202,15 @@ describe('Этап 5 — версия сцены и сигнал открыты�
       assert.equal(created.status, 201);
       const version = created.data.version;
       const signal = { type: 'workspace:changed', what: 'scene', version, origin: TAB };
-      // mine — правку сделал сам этот человек (в этой или другой вкладке); какая именно вкладка — видно по метке
-      assert.deepEqual(await mine.next(), { ...signal, mine: true });
-      assert.deepEqual(await secondTab.next(), { ...signal, mine: true });
-      assert.deepEqual(await theirs.next(), { ...signal, mine: false });
+      // mine — правку сделал сам этот человек (в этой или другой вкладке); какая именно вкладка — видно по метке.
+      // С этапа 7 к сигналу приложено само изменение (delta) — оно проверяется отдельно, в live.test.js
+      // С этапа 7 к сигналу приложены само изменение (delta) и подпись автора (actor)
+      const withoutDelta = ({ delta, actor, ...rest }) => rest;
+      assert.deepEqual(withoutDelta(await mine.next()), { ...signal, mine: true });
+      assert.deepEqual(withoutDelta(await secondTab.next()), { ...signal, mine: true });
+      const theirsMessage = await theirs.next();
+      assert.deepEqual(withoutDelta(theirsMessage), { ...signal, mine: false });
+      assert.equal(theirsMessage.delta.add[0].id, created.data.source.id);
 
       // Сигнал данных не несёт: саму сцену страница перечитывает обычным запросом, где проверяются права
       assert.equal((await sceneOf(moderator.visitor, stage.id)).scene.version, version);
@@ -2213,9 +2218,9 @@ describe('Этап 5 — версия сцены и сигнал открыты�
       // Правка модератора — без метки: её в сообщении просто нет
       const moved = await patchSource(moderator.visitor, stage.id, created.data.source.id, { x: 7 });
       const plain = { type: 'workspace:changed', what: 'scene', version: version + 1 };
-      assert.deepEqual(await theirs.next(), { ...plain, mine: true });
-      assert.deepEqual(await mine.next(), { ...plain, mine: false });
-      assert.deepEqual(await secondTab.next(), { ...plain, mine: false });
+      assert.deepEqual(withoutDelta(await theirs.next()), { ...plain, mine: true });
+      assert.deepEqual(withoutDelta(await mine.next()), { ...plain, mine: false });
+      assert.deepEqual(withoutDelta(await secondTab.next()), { ...plain, mine: false });
       assert.equal(moved.data.version, version + 1);
 
       // Метка — не право и не секрет, но и не место для чужого текста: негодная в рассылку не попадает
@@ -2225,7 +2230,7 @@ describe('Этап 5 — версия сцены и сигнал открыты�
           `${stage.api}/sources/${created.data.source.id}`, { x: 100 + index }, { headers: { 'X-Client-Id': encodeURIComponent(tab) } }
         );
         assert.equal(res.status, 200, tab);
-        assert.deepEqual(await theirs.next(), { type: 'workspace:changed', what: 'scene', version: version + 2 + index, mine: false }, tab);
+        assert.deepEqual(withoutDelta(await theirs.next()), { type: 'workspace:changed', what: 'scene', version: version + 2 + index, mine: false }, tab);
         await mine.next();
         await secondTab.next();
       }
@@ -2246,10 +2251,15 @@ describe('Этап 5 — версия сцены и сигнал открыты�
       const { visitor, api, id } = stage;
       const start = (await sceneOf(visitor, id)).scene.version;
       const versions = [];
-      const expectSignal = async (res, what) => {
-        assert.ok(res.status === 200 || res.status === 201, `${what}: ${res.text}`);
+      const expectSignal = async (res, label, { scene = true } = {}) => {
+        assert.ok(res.status === 200 || res.status === 201, `${label}: ${res.text}`);
         const message = await listener.next();
-        assert.deepEqual(message, { type: 'workspace:changed', what: 'scene', mine: false, version: res.data.version, origin: TAB }, what);
+        const { delta, actor, ...rest } = message;
+        assert.deepEqual(rest, { type: 'workspace:changed', what: 'scene', mine: false, version: res.data.version, origin: TAB }, label);
+        /* Изменение приложено всегда, когда изменилась сама сцена. Загрузка файла сцену
+           не меняет — меняется библиотека файлов, а она есть только у страницы площадки. */
+        if (scene) assert.ok(delta && typeof delta === 'object', `${label}: к сигналу не приложено изменение`);
+        else assert.equal(delta, undefined, `${label}: у сцены не было изменений, а delta пришла`);
         versions.push(message.version);
         return res.data;
       };
@@ -2264,10 +2274,10 @@ describe('Этап 5 — версия сцены и сигнал открыты�
       await expectSignal(await visitor.post(`${api}/sources/${timer.id}/command`, { action: 'start' }, from(TAB)), 'команда таймеру');
       silent.push(await visitor.post(`${api}/sources/${timer.id}/command`, { action: 'start' }, from(TAB))); // уже идёт
       const copy = (await expectSignal(await visitor.post(`${api}/sources/${timer.id}/duplicate`, {}, from(TAB)), 'копия')).source;
-      const file = (await expectSignal(await visitor.upload(`${api}/media`, png(), from(TAB)), 'загрузка файла')).file;
+      const file = (await expectSignal(await visitor.upload(`${api}/media`, png(), from(TAB)), 'загрузка файла', { scene: false })).file;
       await expectSignal(await visitor.patch(`${api}/sources/${image.id}`, { file: file.id }, from(TAB)), 'файл назначен');
       await expectSignal(await visitor.patch(`${api}/sources/${image.id}`, { file: null }, from(TAB)), 'файл снят');
-      await expectSignal(await visitor.post(`${api}/media/${file.id}/delete`, {}, from(TAB)), 'удаление файла');
+      await expectSignal(await visitor.post(`${api}/media/${file.id}/delete`, {}, from(TAB)), 'удаление файла', { scene: false });
       await expectSignal(await visitor.post(`${api}/sources/${copy.id}/delete`, {}, from(TAB)), 'удаление источника');
 
       // Отказы — тоже без сигнала
@@ -2305,7 +2315,9 @@ describe('Этап 5 — версия сцены и сигнал открыты�
       assert.equal((await ours.next()).what, 'scene');
       await addSource(neighbour.visitor, neighbour.id, 'shape');
       // Соседу пришло одно сообщение — о его собственной сцене
-      assert.deepEqual(await theirs.next(), { type: 'workspace:changed', what: 'scene', mine: true, version: 1 });
+      const neighbourMessage = await theirs.next();
+      const { delta: ignored, actor: ignoredToo, ...neighbourRest } = neighbourMessage;
+      assert.deepEqual(neighbourRest, { type: 'workspace:changed', what: 'scene', mine: true, version: 1 });
       assert.equal(theirs.inbox.length, 0);
       assert.equal(ours.inbox.length, 0);
     } finally {

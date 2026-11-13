@@ -10,9 +10,11 @@ import { createSceneView } from '../scene/view.js';
    и в редакторе (js/scene/view.js), поэтому в эфире сцена выглядит так же.
 
    Страница не входит в аккаунт. Площадку ей открывает ссылка оверлея из адреса:
-   по ней сервер отдаёт сцену, файлы и сигнал «сцена изменилась». Получив сигнал,
-   страница перечитывает сцену обычным запросом. Если сигнал не дошёл, это не беда:
-   сцена сверяется ещё и по часам — редко, пока канал на связи, и часто, пока его нет.
+   по ней сервер отдаёт сцену, файлы и сигнал «сцена изменилась». С этапа 7 к сигналу
+   приложено само изменение: страница применяет его к своей копии, и правка видна
+   в эфире сразу, без запроса. Перечитывает сцену страница только когда изменение
+   не подошло (пришло не по порядку, непонятное или слишком давно) да ещё по часам —
+   редко, пока канал на связи, и часто, пока его нет.
 
    Главное правило: в эфир не попадает ничего, кроме сцены. Нет связи — остаётся
    то, что уже показано. Ссылка перестала действовать — сцена гаснет, а страница
@@ -112,20 +114,19 @@ function layout() {
   fit();
 }
 
-function apply(data) {
-  const scene = data.scene;
-  if (!scene || !(scene.width > 0) || !(scene.height > 0) || !Array.isArray(data.sources)) return false;
-  if (scene.width !== size.width || scene.height !== size.height) {
-    size = { width: scene.width, height: scene.height };
-    view.setSize(size.width, size.height);
+/* Источники с той же сценой: размер сверяется один раз на всех.
+   Настройки и состояние источника, которые не изменились, остаются теми же объектами:
+   по этому признаку сцена понимает, что содержимое перерисовывать не нужно. Ролик
+   не начинается заново и рамка своего блока не перезагружается оттого, что источник
+   подвинули или рядом поправили надпись. */
+function show(width, height, sources) {
+  if (width !== size.width || height !== size.height) {
+    size = { width, height };
+    view.setSize(width, height);
     layout();
   }
-  /* Настройки и состояние источника, которые не изменились, остаются теми же объектами:
-     по этому признаку сцена понимает, что содержимое перерисовывать не нужно. Ролик
-     не начинается заново и рамка своего блока не перезагружается оттого, что источник
-     подвинули или рядом поправили надпись. */
   const next = new Map();
-  const sources = data.sources.map((source) => {
+  const list = sources.map((source) => {
     const settings = JSON.stringify(source.settings);
     const stateText = JSON.stringify(source.state);
     const old = shown.get(source.id);
@@ -137,8 +138,59 @@ function apply(data) {
     return source;
   });
   shown = next;
-  view.setSources(sources);
+  view.setSources(list);
+}
+
+function apply(data) {
+  const scene = data.scene;
+  if (!scene || !(scene.width > 0) || !(scene.height > 0) || !Array.isArray(data.sources)) return false;
+  show(scene.width, scene.height, data.sources);
   version = scene.version;
+  return true;
+}
+
+/* ---------- Правки на лету ----------
+   К сигналу «сцена изменилась» приложено само изменение. Применяется оно, только если
+   ровно на шаг новее того, что на экране; иначе сцену проще перечитать, чем догонять.
+
+   Осторожно с порядком: если два источника переставляли, изменение приходит с полным
+   порядком слоёв — и только тогда он применяется. Неполный порядок значил бы, что
+   страница чего-то не знает. */
+function applyDelta(delta, nextVersion) {
+  if (!delta || typeof delta !== 'object') return false;
+  if (typeof nextVersion === 'number' && nextVersion !== version + 1) return false;
+  const { add = [], put = [], order, remove = [] } = delta;
+  if (!Array.isArray(add) || !Array.isArray(put) || !Array.isArray(remove)) return false;
+  if (order !== undefined && !Array.isArray(order)) return false;
+
+  const byId = new Map();
+  for (const item of shown.values()) byId.set(item.source.id, item.source);
+  const current = [...shown.values()].map((item) => item.source);
+
+  // Источник, которого страница не знает, — повод перечитать: значит, она отстала
+  if (put.some((item) => !item || !byId.has(item.id))) return false;
+  if (add.some((item) => !item || byId.has(item.id))) return false;
+  if (remove.some((id) => !byId.has(id))) return false;
+
+  let list = current.filter((source) => !remove.includes(source.id));
+  const index = new Map(list.map((source) => [source.id, source]));
+  for (const item of put) {
+    const at = list.indexOf(index.get(item.id));
+    if (at < 0) continue;
+    index.set(item.id, { ...list[at], ...item });
+    list[at] = index.get(item.id);
+  }
+  for (const item of add) {
+    index.set(item.id, item);
+    list.push(item);
+  }
+  if (order) {
+    const complete = order.length === list.length && order.every((id) => index.has(id));
+    if (complete) list = order.map((id) => index.get(id));
+  }
+
+  show(size.width, size.height, list);
+  if (typeof nextVersion === 'number') version = nextVersion;
   return true;
 }
 
@@ -316,6 +368,12 @@ function startLive() {
     onMessage(msg) {
       if (!msg) return;
       if (msg.type === 'overlay:changed') {
+        /* Изменение приложено к сигналу — применяем его сами. Не подошло (пропуск,
+           повтор, слишком давно) — перечитываем сцену обычным запросом. */
+        if (applyDelta(msg.delta, msg.version)) {
+          report();
+          return;
+        }
         sync(typeof msg.version === 'number' ? msg.version : Infinity);
       } else if (msg.type === 'denied') {
         // Сервер закрыл канал. Почему — скажет обычный запрос: если ссылка отменена, сцена погаснет

@@ -12,9 +12,20 @@ import { createServerClock } from '../scene/clock.js';
    набор текста) склеиваются в одну команду.
 
    Версия сцены. Каждое сохранённое изменение увеличивает её на единицу. Если
-   пришёл сигнал с более новой версией или ответ на свою команду «перепрыгнул»
-   через номер — значит, сцену менял кто-то ещё, и страница перечитывает её
-   целиком. Правки, которые человек ещё не успел сохранить, при этом остаются.
+   пришёл ответ на свою команду «перепрыгнул» через номер — значит, сцену менял
+   кто-то ещё, и страница перечитывает её целиком. Правки, которые человек ещё
+   не успел сохранить, при этом остаются.
+
+   Правки на лету (этап 7). По живому каналу приходит не только «сцена изменилась»,
+   но и само изменение: какие источники появились, изменились, переставились или
+   исчезли. Страница применяет его к своей копии — сцена в эфире меняется сразу,
+   без запроса. Перечитывание остаётся страховкой: если изменение пришло не по
+   порядку, непонятное или слишком давно (страница только что подключалась),
+   страница перечитывает сцену целиком.
+
+   Присутствие. Пока человек тянет источник, страница присылает его промежуточное
+   положение в живой канал — и видит по нему чужие: «Модератор двигает: Заголовок».
+   В базу это не попадает: сохраняется одна итоговая правка, когда источник отпустили.
    ========================================================================== */
 
 const SAVE_DELAY_MS = 350; // пауза после последней правки, прежде чем отправлять
@@ -73,6 +84,14 @@ export function createStore({ workspaceId, clientId, notify }) {
   let silence = null; // последний ответ, которого по существу не было: нет связи, сбой, просьба подождать
   let gone = false;
   let saveState = 'saved';
+  /* Куда уходит присутствие (задаётся страницей, когда живой канал подключён).
+     null — канала нет: двигать можно, просто другие этого не увидят. */
+  let presenceSend = null;
+  let presenceLast = 0;
+  const PRESENCE_EVERY_MS = 120; // чаще этого о положении не сообщаем: глазам хватает
+  /* Кто сейчас что двигает — со слов сервера. Ключ — метка вкладки (origin правки):
+     так «двигаете вы» относится к этой вкладке, а не к человеку вообще. */
+  let present = new Map();
 
   /* ---------- Подписки ---------- */
   const listeners = new Map();
@@ -164,6 +183,68 @@ export function createStore({ workspaceId, clientId, notify }) {
     if (state.selectedId && !find(state.selectedId)) state.selectedId = null;
     state.ready = true;
     emit('change', { kind: 'all' });
+  }
+
+  /* ---------- Правки на лету ----------
+     Изменение из живого канала применяется к копии сцены. Порядок строгий: изменение
+     годится, только если оно ровно на шаг новее того, что страница знает. Всё
+     остальное (пропуск, повтор, слишком большая дыра — например, страница только что
+     подключилась) — повод перечитать сцену целиком: так проще и надёжнее, чем
+     догонять неизвестное.
+
+     Что важнее всего: неотправленная правка человека остаётся поверх пришедшего.
+     Чужая правка того же источника не должна затирать то, что человек ещё не успел
+     сохранить. */
+
+  // Источник пришёл с сервера: накладываем неотправленную правку, остальное — как есть
+  function mergeServer(server) {
+    const patch = pending.get(server.id);
+    return patch ? applyPatch(server, patch) : server;
+  }
+
+  function applyDelta(delta, nextVersion) {
+    if (!delta || typeof delta !== 'object') return false;
+    if (typeof nextVersion === 'number' && nextVersion !== version + 1) return false;
+    const { add = [], put = [], order, remove = [] } = delta;
+    if (!Array.isArray(add) || !Array.isArray(put) || !Array.isArray(remove)) return false;
+    // Порядок может прийти и неполный — тогда его просто не трогаем
+    if (order !== undefined && (!Array.isArray(order) || order.some((id) => typeof id !== 'string'))) return false;
+
+    const known = new Set(state.sources.map((source) => source.id));
+    // Источник, которого страница не знает, — повод перечитать: значит, она отстала
+    if (put.some((item) => !item || !known.has(item.id))) return false;
+    // Источника, который уже есть, быть не может: значит, она отстала
+    if (add.some((item) => !item || known.has(item.id))) return false;
+    if (remove.some((id) => !known.has(id))) return false;
+
+    let list = state.sources.map((source) => source);
+    for (const id of remove) {
+      list = list.filter((source) => source.id !== id);
+      pending.delete(id);
+      if (state.selectedId === id) state.selectedId = null;
+    }
+    for (const item of put) {
+      const at = list.findIndex((source) => source.id === item.id);
+      if (at < 0) continue;
+      const merged = mergeServer({ ...list[at], ...item });
+      // Не изменившийся источник остаётся тем же объектом: сцена его не перерисовывает
+      list[at] = same(list[at], merged) ? list[at] : merged;
+    }
+    const byId = new Map(list.map((source) => [source.id, source]));
+    for (const item of add) {
+      const merged = mergeServer(item);
+      list.push(merged);
+      byId.set(merged.id, merged);
+    }
+    if (order) {
+      // Полный порядок — тот, где перечислены все известные источники
+      const complete = order.length === list.length && order.every((id) => byId.has(id));
+      if (complete) list = order.map((id) => byId.get(id));
+    }
+    state.sources = list;
+    if (typeof nextVersion === 'number') version = nextVersion;
+    emit('change', { kind: 'all' });
+    return true;
   }
 
   /* ---------- Очередь команд ---------- */
@@ -569,7 +650,67 @@ export function createStore({ workspaceId, clientId, notify }) {
       if (message?.what !== 'scene') return;
       if (message.origin === clientId) return; // наша же правка: ответ на неё придёт запросом
       if (typeof message.version === 'number' && message.version <= version) return;
+      // Изменение к сигналу: применяем сами — сцена меняется сразу, без запроса
+      if (applyDelta(message.delta, message.version)) return;
       queueRefetch();
+    },
+
+    /* Изменение пришло по каналу и не применилось: страница ничего не потеряла,
+       но и нового не увидела. Перечитываем сцену обычным запросом. */
+    stale: () => queueRefetch(0),
+
+    /* ---------- Присутствие ---------- */
+    // Страница сообщает, куда отправлять «что я двигаю» (или null — канала нет)
+    setPresenceChannel(send) {
+      presenceSend = typeof send === 'function' ? send : null;
+      if (!presenceSend) presenceLast = 0;
+    },
+
+    /* Положение источника, который сейчас тянут. В базу ничего не идёт, а сообщение
+       о присутствии уходит не чаще, чем раз в PRESENCE_EVERY_MS.
+       Полный прямоугольник берём из сцены, а не из правки: правка несёт только то, что
+       изменилось, а вторая страница не знает ни размера источника, ни того, что он
+       вообще есть, — ей нужны все четыре числа. */
+    moving(id) {
+      if (!presenceSend || gone) return;
+      const source = find(id);
+      if (!source) return;
+      const time = performance.now();
+      if (time - presenceLast < PRESENCE_EVERY_MS) return;
+      presenceLast = time;
+      presenceSend({
+        sourceId: id,
+        x: Math.round(source.x),
+        y: Math.round(source.y),
+        width: Math.round(source.width),
+        height: Math.round(source.height),
+        end: false,
+      });
+    },
+
+    // Источник отпустили: присутствие снимается сразу
+    stoppedMoving() {
+      if (!presenceSend) return;
+      presenceLast = 0;
+      presenceSend({ end: true });
+    },
+
+    // Кто сейчас что двигает — для панели и сцены
+    presence: () => [...present.values()],
+    presenceOf: (sourceId) => present.get(sourceId) || null,
+
+    /* Сервер сказал, кто что двигает — и отметил, чьи это движения (mine): у одного
+       человека в двух вкладках это одно присутствие, и обе видят «двигаете вы».
+       Страница ничего не сравнивает сама. */
+    setPresence(people) {
+      const next = new Map();
+      for (const person of Array.isArray(people) ? people : []) {
+        if (person && typeof person.sourceId === 'string') next.set(person.sourceId, person);
+      }
+      const outline = (list) => JSON.stringify(list.map((person) => [person.sourceId, person.name, person.mine]).sort());
+      const changed = outline([...present.values()]) !== outline([...next.values()]);
+      present = next;
+      if (changed) emit('change', { kind: 'presence' });
     },
 
     // Время сервера: по нему считают таймеры, чтобы у всех совпадало (см. scene/clock.js)

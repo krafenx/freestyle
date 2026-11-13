@@ -34,6 +34,9 @@ export function createStage({ store, stage, frame, sceneRoot, overlay, onEdit, o
   }
   const sizeTag = el('div', 'sel-size');
   box.append(sizeTag);
+  /* Чужая рука: чужой источник, который сейчас тянут, обводится пунктиром с подписью
+     «кто» — иначе непонятно, почему он «сам» едет по сцене. */
+  const remoteMarks = new Map(); // номер источника → его рамка и подпись
   const guideX = el('div', 'snap-line vertical');
   const guideY = el('div', 'snap-line horizontal');
   guideX.hidden = true;
@@ -49,6 +52,7 @@ export function createStage({ store, stage, frame, sceneRoot, overlay, onEdit, o
     // Рамка сцены держит пропорции сама; здесь только сверяем высоту на случай иного размера сцены
     frame.style.aspectRatio = `${width} / ${height}`;
     draw();
+    drawPresence();
   }
 
   function draw() {
@@ -65,6 +69,40 @@ export function createStage({ store, stage, frame, sceneRoot, overlay, onEdit, o
     // У маленькой рамки ручки на серединах сторон только мешают — остаются угловые
     box.classList.toggle('small', Math.min(source.width, source.height) * scale < 34);
     sizeTag.textContent = `${source.width} × ${source.height}`;
+  }
+
+  /* ---------- Чужие руки ----------
+     Присутствие приходит только с живым каналом; без него этой разметки просто нет. */
+  function drawPresence() {
+    const seen = new Set();
+    for (const person of store.presence()) {
+      if (person.mine) continue; // своя рука уже видна рамкой выделения
+      const source = store.find(person.sourceId);
+      if (!source) continue;
+      seen.add(person.sourceId);
+      let mark = remoteMarks.get(person.sourceId);
+      if (!mark) {
+        const tag = el('div', 'remote-tag');
+        const frame = el('div', 'remote-box');
+        frame.append(tag);
+        overlay.append(frame);
+        mark = { frame, tag };
+        remoteMarks.set(person.sourceId, mark);
+      }
+      // Подпись: кто и кем приходится площадке
+      mark.tag.textContent = `${person.name || 'кто-то'} двигает: ${source.name}`;
+      const box = { x: person.x, y: person.y, width: person.width, height: person.height };
+      const style = mark.frame.style;
+      style.left = `${frame.clientLeft + box.x * scale}px`;
+      style.top = `${frame.clientTop + box.y * scale}px`;
+      style.width = `${box.width * scale}px`;
+      style.height = `${box.height * scale}px`;
+    }
+    for (const [id, mark] of [...remoteMarks]) {
+      if (seen.has(id)) continue;
+      mark.frame.remove();
+      remoteMarks.delete(id);
+    }
   }
 
   function showGuides(x, y) {
@@ -277,8 +315,11 @@ export function createStage({ store, stage, frame, sceneRoot, overlay, onEdit, o
     const patch = drag.kind === 'move'
       ? moved(dx, dy, free)
       : resized(dx, dy, { keepRatio: drag.keepRatio !== event.shiftKey, free }); // Shift меняет правило пропорций на обратное
-    // Пока тянут — только показываем; на сервер уйдёт итог, когда отпустят
+    // Пока тянут — только показываем; на сервер уйдёт итог, когда отпустят.
+    // Промежуточное положение при этом уходит в живой канал: другие видят, что источник
+    // двигают и где он сейчас, — но в базу ничего не попадает.
     store.change(drag.id, patch, { save: false });
+    store.moving(drag.id);
   });
 
   function finish(event) {
@@ -287,7 +328,10 @@ export function createStage({ store, stage, frame, sceneRoot, overlay, onEdit, o
     drag = null;
     stage.classList.remove('dragging');
     showGuides(null, null);
-    if (wasActive) store.flush();
+    if (wasActive) {
+      store.stoppedMoving(); // «двигаю» снимается сразу, не дожидаясь, пока истечёт срок
+      store.flush();
+    }
   }
   stage.addEventListener('pointerup', finish);
   stage.addEventListener('pointercancel', finish);
@@ -348,7 +392,7 @@ export function createStage({ store, stage, frame, sceneRoot, overlay, onEdit, o
   new ResizeObserver(fit).observe(frame);
   store.on('change', (detail) => {
     if (detail.kind === 'media') return;
-    if (detail.kind === 'all') fit();
+    if (detail.kind === 'presence' || detail.kind === 'all') fit();
     else draw();
   });
   fit();

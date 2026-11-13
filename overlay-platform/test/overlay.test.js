@@ -908,7 +908,9 @@ describe('Этап 6 — живой канал оверлея: только си
     const neighbour = await joinOverlay(ctx, otherLink.token);
     try {
       const created = await other.visitor.post(`${other.api}/sources`, { type: 'text' });
-      assert.deepEqual(await neighbour.next(), { type: 'overlay:changed', version: created.data.version });
+      const message = await neighbour.next();
+      assert.equal(message.type, 'overlay:changed');
+      assert.equal(message.version, created.data.version);
       // Правки проверяемой площадки в этот канал не попадают
       await addSource(stage.visitor, stage.id, 'shape');
       await sleep(150);
@@ -941,7 +943,11 @@ describe('Этап 6 — живой канал оверлея: только си
       // Правка сцены — сигнал с номером версии, и ничего больше
       const created = await stage.visitor.post(`${stage.api}/sources`, { type: 'text' }, { headers: { 'X-Client-Id': 'tab7k2m9x4pq' } });
       assert.equal(created.status, 201);
-      assert.deepEqual(await socket.next(), { type: 'overlay:changed', version: created.data.version });
+      const first = await socket.next();
+      assert.equal(first.type, 'overlay:changed');
+      assert.equal(first.version, created.data.version);
+      // С этапа 7 к сигналу приложено само изменение — без названий и имён (см. live.test.js)
+      assert.equal(first.delta.add[0].id, created.data.source.id);
 
       // Разговор о площадке: название, команда, приглашения — оверлею не слышен
       await stage.visitor.patch(`/api/workspaces/${stage.id}`, { name: 'Живой оверлей 2' });
@@ -950,12 +956,14 @@ describe('Этап 6 — живой канал оверлея: только си
 
       // А правка сцены — слышна, и с новым номером версии
       await patchSource(stage.visitor, stage.id, created.data.source.id, { x: 11 });
-      assert.deepEqual(await socket.next(), { type: 'overlay:changed', version: created.data.version + 1 });
-      // Номер версии — только числом; ни кто менял, ни с какой страницы
+      const moved = await socket.next();
+      assert.equal(moved.type, 'overlay:changed');
+      assert.equal(moved.version, created.data.version + 1);
+      // Ни кто менял, ни с какой страницы, ни названия источника: только тип, номер версии и изменение
       assert.deepEqual(Object.keys(await (async () => {
         await patchSource(stage.visitor, stage.id, created.data.source.id, { x: 12 });
         return socket.next();
-      })()).sort(), ['type', 'version']);
+      })()).sort(), ['delta', 'type', 'version']);
 
       // Новая ссылка закрывает канал по старой; сигнал об этом — отказ, а не рассказ
       const old = overlay.token;
@@ -1129,36 +1137,13 @@ describe('Этап 6 — обновление с прошлого этапа', (
     }
   });
 
-  it('страницы и сервер называют текущим этап 6, а прошлый — прошлым', async () => {
-    // Главная и кабинет знают, какой этап сейчас
-    assert.match(readPublic('index.html'), /этап 6 из 9/);
-    assert.match(readPublic('app.html'), /<span class="mono">6 \/ 9<\/span>/);
-    assert.match(readPublic('app.html'), /этап 6 из 9 завершён/);
-    assert.match(readPublic('app.html'), /<div class="stage-card-title">Оверлей для OBS<\/div>/);
-    // Ни одна страница и ни один скрипт больше не называют текущим этап 5
-    const files = [];
-    const stack = [publicDir];
-    while (stack.length) {
-      const folder = stack.pop();
-      for (const entry of fs.readdirSync(folder, { withFileTypes: true })) {
-        const full = path.join(folder, entry.name);
-        if (entry.isDirectory()) stack.push(full);
-        else if (/\.(html|js|css)$/.test(entry.name)) files.push(full);
-      }
-    }
-    assert.ok(files.length > 20);
-    for (const file of files) {
-      assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /этап(?:е|а)? 5\b|5 \/ 9|5 из 9/i, path.relative(publicDir, file));
-    }
-
-    // Сервер сообщает этап 6 и пятую версию структуры базы
+  it('сервер сообщает седьмой этап и шестую версию структуры базы', async () => {
     const ctx = await startServer();
     try {
       const health = (await createVisitor(ctx.baseUrl).get('/api/health')).data;
       assert.equal(health.stage, PLATFORM_STAGE);
-      assert.equal(PLATFORM_STAGE, 6);
-      assert.equal(health.db.schemaVersion, 5);
-      assert.equal(health.db.latestMigration, '005_overlay_link');
+      assert.equal(health.db.schemaVersion, SCHEMA_VERSION);
+      assert.equal(health.db.latestMigration, LATEST_MIGRATION);
       // Общий счётчик на связи существует, но оверлею он не показывается
       assert.equal(typeof health.realtime.connectedClients, 'number');
     } finally {
@@ -1166,22 +1151,10 @@ describe('Этап 6 — обновление с прошлого этапа', (
     }
   });
 
-  it('документы называют этап 6 сделанным и объясняют, как смотреть оверлей', () => {
-    const plan = readPage('../docs/overlay-platform/ARCHITECTURE.md');
-    const projectReadme = readPage('README.md');
-    const repoReadme = readPage('../README.md');
-    for (const text of [plan, projectReadme, repoReadme]) {
-      assert.match(text, /этап 6/i, 'документы должны называть текущий этап');
-    }
-    // Архитектура: оверлей описан в общем плане и в своём разделе
-    assert.match(plan, /Оверлей для OBS/);
-    assert.match(plan, /\| ?6 ?\|/);
-    // Оба README обещают «готов этап 6 из 9» и рассказывают про ссылку для OBS
-    for (const text of [projectReadme, repoReadme]) {
-      assert.match(text, /этап 6 из 9/);
-      assert.match(text, /[Сс]сылка для OBS/);
-    }
-    // Версия платформы в описании — та же, что в package.json
-    assert.equal(JSON.parse(readPage('package.json')).version, '0.6.0');
+  it('в оверлее по-прежнему только то, что в эфире', () => {
+    // Названия источника и защита от сдвига — дело редактора: по ссылке оверлея их нет
+    const code = readServer('scene/scene.js');
+    assert.match(code, /delete shown\.name;/);
+    assert.match(code, /delete shown\.locked;/);
   });
 });

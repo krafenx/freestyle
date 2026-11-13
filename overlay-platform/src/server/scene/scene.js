@@ -188,7 +188,7 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
 
   /* ---------- Сохранение и оповещение ---------- */
 
-  function announce(ws, version, { userId, origin }) {
+  function announce(ws, version, { userId, origin }, delta = null) {
     if (!onChange) return;
     try {
       onChange({
@@ -199,6 +199,10 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
         version,
         // Метка страницы — не право и не секрет: по ней страница узнаёт в рассылке собственную правку
         origin: typeof origin === 'string' && ORIGIN_PATTERN.test(origin) ? origin : null,
+        /* Что именно изменилось — к сигналу. Страница площадки и оверлей применяют
+           это к своей копии сцены и не перечитывают её. Если изменение к такой
+           передаче не готово (или его нет), они перечитывают сцену, как раньше. */
+        ...(delta ? { delta } : {}),
       });
     } catch (err) {
       // Изменение уже сохранено: сбой при оповещении не должен превращать его в ошибку
@@ -206,18 +210,51 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
     }
   }
 
+  /* ---------- Что именно изменилось ----------
+     К сигналу «сцена изменилась» прикладывается само изменение, чтобы страница
+     площадки и оверлей применили его к своей копии, а не перечитывали сцену целиком.
+     Изменение строится из того же представления источника, что уходит странице
+     (sourceView), поэтому применённое на странице совпадает с перечитанным.
+
+     add — источники, которых на странице ещё нет; put — те, что есть и изменились;
+     order — порядок слоёв, если он менялся; remove — номера исчезнувших источников.
+     Кто где стоит (присутствие) сюда не входит: положение во время перетаскивания
+     по этому же каналу идёт отдельным сообщением и в базе не сохраняется. */
+  function deltaOf({ add = [], put = [], order, remove = [] } = {}) {
+    const delta = {};
+    if (add.length) delta.add = add;
+    if (put.length) delta.put = put;
+    if (order) delta.order = order;
+    if (remove.length) delta.remove = remove;
+    return Object.keys(delta).length ? delta : null;
+  }
+
+  // Что изменилось у существующего источника: прежнее и новое представления
+  function putOf(before, after) {
+    if (same(before, after)) return null;
+    const changed = {};
+    for (const key of Object.keys(after)) {
+      if (key === 'settings') {
+        if (!same(before.settings, after.settings)) changed.settings = after.settings;
+      } else if (!same(before[key], after[key])) {
+        changed[key] = after[key];
+      }
+    }
+    return Object.keys(changed).length ? { id: after.id, ...changed } : null;
+  }
+
   /* Одно изменение сцены: всё, что делает work, и новый номер версии сохраняются
      вместе или не сохраняются вовсе. Если work сообщает unchanged — менять было
      нечего: версия остаётся прежней и никого не оповещают. */
   function commit(ws, who, work) {
-    const { unchanged, ...answer } = transaction(() => {
+    const { unchanged, delta, ...answer } = transaction(() => {
       const out = work();
       const version = out.unchanged
         ? sql.scene.get(ws.rowId).scene_version
         : sql.bumpVersion.get(ws.rowId).scene_version;
       return { ...out, version };
     });
-    if (!unchanged) announce(ws, answer.version, who);
+    if (!unchanged) announce(ws, answer.version, who, delta ?? null);
     return answer;
   }
 
@@ -456,7 +493,8 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
         settings,
         state: module.initialState ? module.initialState(settings) : {},
       });
-      return { source: sourceView(sql.source.get(publicId, ws.rowId)), order: orderOf(ws.rowId) };
+      const source = sourceView(sql.source.get(publicId, ws.rowId));
+      return { source, order: orderOf(ws.rowId), delta: deltaOf({ add: [source], order: orderOf(ws.rowId) }) };
     });
   }
 
@@ -510,7 +548,8 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
         module?.readState ? JSON.stringify(state) : row.state,
         row.id
       );
-      return { source: sourceView(sql.sourceById.get(row.id)) };
+      const afterView = sourceView(sql.sourceById.get(row.id));
+      return { source: afterView, delta: deltaOf({ put: [putOf(before, afterView)].filter(Boolean) }) };
     });
   }
 
@@ -522,7 +561,11 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
       const row = findSource(ws, sourceId);
       sql.deleteSource.run(row.id);
       writeOrder(sql.sources.all(ws.rowId).map((item) => item.id));
-      return { removed: row.public_id, order: orderOf(ws.rowId) };
+      return {
+        removed: row.public_id,
+        order: orderOf(ws.rowId),
+        delta: deltaOf({ remove: [row.public_id], order: orderOf(ws.rowId) }),
+      };
     });
   }
 
@@ -560,7 +603,8 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
       const order = rows.map((item) => item.id);
       order.splice(order.indexOf(row.id) + 1, 0, copy.id);
       writeOrder(order);
-      return { source: sourceView(sql.sourceById.get(copy.id)), order: orderOf(ws.rowId) };
+      const source = sourceView(sql.sourceById.get(copy.id));
+      return { source, order: orderOf(ws.rowId), delta: deltaOf({ add: [source], order: orderOf(ws.rowId) }) };
     });
   }
 
@@ -581,7 +625,8 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
       order.splice(from, 1);
       order.splice(to, 0, row.id);
       writeOrder(order);
-      return { order: orderOf(ws.rowId) };
+      const result = orderOf(ws.rowId);
+      return { order: result, delta: deltaOf({ order: result }) };
     });
   }
 
@@ -605,7 +650,8 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
       if (same(state, before.state)) return { source: before, unchanged: true };
 
       sql.setState.run(JSON.stringify(state), row.id);
-      return { source: sourceView(sql.sourceById.get(row.id)) };
+      const afterView = sourceView(sql.sourceById.get(row.id));
+      return { source: afterView, delta: deltaOf({ put: [putOf(before, afterView)].filter(Boolean) }) };
     });
   }
 
@@ -689,7 +735,13 @@ export function createScene({ db, workspaces, storage, now = Date.now, limits = 
             }
           }
           storage.keep(received.tmpPath, again.publicId, fileId);
-          return { file: mediaView(sql.mediaFile.get(fileId, again.rowId)), usage: usageOf(again.rowId) };
+          /* Новый файл в библиотеке. Сама сцена от него не меняется — меняется список
+             файлов, а он есть только у страницы площадки. */
+          return {
+            file: mediaView(sql.mediaFile.get(fileId, again.rowId)),
+            usage: usageOf(again.rowId),
+            delta: deltaOf({}),
+          };
         });
       } catch (err) {
         storage.discard(received.tmpPath);

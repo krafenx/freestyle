@@ -449,6 +449,59 @@ createLayers({
   onDuplicate: duplicate,
 });
 
+/* ---------- Отмена своих действий ----------
+   История живёт на странице и только до тех пор, пока правка не уехала на сервер:
+   отменить чужую правку или свою, уже сохранённую, значило бы сделать новую правку
+   поверх чужой работы — а человек об этом не просит (см. store.js). */
+const undoButton = $('undo');
+const redoButton = $('redo');
+
+function paintHistory() {
+  const history = store.history();
+  undoButton.disabled = !history.canUndo;
+  redoButton.disabled = !history.canRedo;
+  undoButton.title = history.canUndo ? `Отменить: ${history.undoLabel} (Ctrl+Z)` : 'Отменять нечего';
+  redoButton.title = history.canRedo ? `Повторить: ${history.redoLabel} (Ctrl+Shift+Z)` : 'Повторять нечего';
+}
+
+function undo() {
+  const entry = store.undo();
+  if (!entry) return;
+  store.select(entry.id || null);
+  paintHistory();
+}
+
+function redo() {
+  const entry = store.redo();
+  if (!entry) return;
+  store.select(entry.id || null);
+  paintHistory();
+}
+
+undoButton.addEventListener('click', () => {
+  undo();
+  stageApi.focus();
+});
+redoButton.addEventListener('click', () => {
+  redo();
+  stageApi.focus();
+});
+
+/* Клавиши работают и здесь, и на сцене: Ctrl+Z привычнее нажимать, не целясь в сцену.
+   В поле ввода браузер отменяет своё (набранный текст) — там не мешаем. */
+document.addEventListener('keydown', (event) => {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(event.target?.tagName || '') || event.target?.isContentEditable;
+  const key = String(event.key).toLowerCase();
+  if (key !== 'z' && key !== 'я') return;
+  if (typing) return;
+  event.preventDefault();
+  if (event.shiftKey) redo();
+  else undo();
+});
+
+store.on('history', paintHistory);
+
 /* ---------- Слои и свойства на узком экране: по очереди ----------
    Вкладку меняет сам человек. Редактор переключает её только там, где следующий шаг
    очевиден: источник только что добавили или по нему щёлкнули дважды — нужны его свойства. */

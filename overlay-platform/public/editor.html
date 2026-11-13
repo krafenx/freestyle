@@ -118,6 +118,13 @@
           <span class="status-badge muted" id="layers-count"></span>
         </div>
         <div class="layer-tools" role="toolbar" aria-label="Действия с выбранным слоем">
+          <button class="icon-btn tool" type="button" id="undo" aria-label="Отменить действие" title="Отменить (Ctrl+Z)" disabled>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h10a5 5 0 0 1 0 10H8M4 8l4-4M4 8l4 4"/></svg>
+          </button>
+          <button class="icon-btn tool" type="button" id="redo" aria-label="Повторить действие" title="Повторить (Ctrl+Shift+Z)" disabled>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 8H10a5 5 0 0 0 0 10h6M20 8l-4-4M20 8l-4 4"/></svg>
+          </button>
+          <span class="tool-gap" aria-hidden="true"></span>
           <button class="icon-btn tool" type="button" id="layer-top" aria-label="Поднять на самый верх" title="На самый верх" disabled>
             <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14M12 20V9M7 13l5-5 5 5"/></svg>
           </button>
@@ -159,7 +166,7 @@
           <div class="stage-foot">
             <span class="kv-inline">сцена <strong id="stage-size">1920 × 1080</strong></span>
             <span class="stage-help" id="stage-help">
-              <span class="help-mouse">Перетаскивайте источники мышью, за квадратики на рамке меняйте размер. Стрелки сдвигают на 1 точку, с Shift — на 10; Alt отключает привязку к краям; Delete удаляет.</span>
+              <span class="help-mouse">Перетаскивайте источники мышью, за квадратики на рамке меняйте размер. Стрелки сдвигают на 1 точку, с Shift — на 10; Alt отключает привязку к краям; Delete удаляет, Ctrl+Z отменяет своё последнее действие.</span>
               <span class="help-touch">Первое касание выбирает источник, второе — двигает. Размер меняют за квадратики на рамке.</span>
             </span>
           </div>

@@ -33,3 +33,18 @@ export function formatMoment(value) {
 
 // Первая буква имени для кружка-аватара; смайлик считается одним знаком
 export const initialOf = (name) => [...String(name || '')][0] || '?';
+
+// Размер файла: «512 Б», «340 КБ», «1,2 МБ» — с запятой, как принято в русском тексте
+export function formatBytes(bytes) {
+  const n = Math.max(0, Number(bytes) || 0);
+  if (n < 1024) return `${n} Б`;
+  const units = ['КБ', 'МБ', 'ГБ'];
+  let value = n / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  const text = value >= 100 || Number.isInteger(value) ? String(Math.round(value)) : value.toFixed(1).replace('.', ',');
+  return `${text} ${units[unit]}`;
+}

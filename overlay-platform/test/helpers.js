@@ -25,6 +25,12 @@ export const NO_LIMITS = Object.fromEntries(
   ].map((name) => [name, { limit: 100000, windowMs: MINUTE }])
 );
 
+/* Что должно быть у платформы к этому этапу: сколько обновлений структуры базы применено,
+   как называется последнее и какой этап сообщает сервер. Меняется раз за этап — здесь. */
+export const SCHEMA_VERSION = 4;
+export const LATEST_MIGRATION = '004_scene';
+export const PLATFORM_STAGE = 5;
+
 export const CODE_PATTERN = /^[A-HJKMNP-TV-Z2-9]{5}(?:-[A-HJKMNP-TV-Z2-9]{5}){3}$/;
 export const GOOD_PASSWORD = 'длинный надёжный пароль 42';
 
@@ -59,7 +65,8 @@ export async function startServer(options = {}) {
 export function createVisitor(baseUrl, { ip, https = false } = {}) {
   const jar = new Map();
 
-  async function call(method, url, { body, headers = {} } = {}) {
+  // body — данные, которые уйдут как JSON; raw — готовые байты (так загружаются файлы)
+  async function call(method, url, { body, raw, headers = {} } = {}) {
     const res = await fetch(`${baseUrl}${url}`, {
       method,
       redirect: 'manual',
@@ -70,7 +77,7 @@ export function createVisitor(baseUrl, { ip, https = false } = {}) {
         ...(https ? { 'X-Forwarded-Proto': 'https' } : {}),
         ...headers,
       },
-      body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
+      body: raw !== undefined ? raw : body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
     });
 
     const setCookies = res.headers.getSetCookie();
@@ -82,14 +89,15 @@ export function createVisitor(baseUrl, { ip, https = false } = {}) {
       else jar.set(name, value);
     }
 
-    const text = await res.text();
+    const bytes = Buffer.from(await res.arrayBuffer());
+    const text = bytes.toString('utf8');
     let data = null;
     try {
       data = JSON.parse(text);
     } catch {
       // ответ не в формате JSON (страница или перенаправление)
     }
-    return { status: res.status, data, text, headers: res.headers, setCookies };
+    return { status: res.status, data, text, bytes, headers: res.headers, setCookies };
   }
 
   return {
@@ -97,6 +105,12 @@ export function createVisitor(baseUrl, { ip, https = false } = {}) {
     get: (url, options) => call('GET', url, options),
     post: (url, body = {}, options = {}) => call('POST', url, { body, ...options }),
     patch: (url, body = {}, options = {}) => call('PATCH', url, { body, ...options }),
+    // Загрузка файла: тело запроса — сами байты, название файла — в заголовке
+    upload: (url, bytes, { name = 'file.bin', headers = {} } = {}) =>
+      call('POST', url, {
+        raw: bytes,
+        headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(name), ...headers },
+      }),
     async isSignedIn() {
       return (await call('GET', '/api/auth/session')).data.authenticated;
     },
@@ -171,7 +185,9 @@ export function openSocket(url, { headers } = {}) {
 /* Окружение для запуска отдельной программой. Настройки платформы из окружения
    самих проверок в него не попадают, а файл .env из папки проекта не читается:
    иначе проверка могла бы открыть рабочую базу вместо временной. */
-const SETTING_NAMES = ['HOST', 'PORT', 'DB_PATH', 'UPLOADS_DIR', 'TRUST_PROXY', 'REGISTRATION', 'SESSION_COOKIE_MODE'];
+const SETTING_NAMES = [
+  'HOST', 'PORT', 'DB_PATH', 'UPLOADS_DIR', 'UPLOADS_TOTAL_LIMIT_MB', 'TRUST_PROXY', 'REGISTRATION', 'SESSION_COOKIE_MODE',
+];
 
 export function childEnv(extra = {}) {
   const env = { ...process.env };

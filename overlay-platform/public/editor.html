@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#050505">
+  <title>Редактор сцены — krafen studio</title>
+  <meta name="robots" content="noindex">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/styles/fonts.css">
+  <link rel="stylesheet" href="/styles/tokens.css">
+  <link rel="stylesheet" href="/styles/atmosphere.css">
+  <link rel="stylesheet" href="/styles/components.css">
+  <link rel="stylesheet" href="/styles/layout.css">
+  <link rel="stylesheet" href="/styles/scene.css">
+  <link rel="stylesheet" href="/styles/editor.css">
+  <script type="module" src="/js/pages/editor.js"></script>
+</head>
+<!-- Страница одна на все площадки: в самой разметке нет ни названия, ни сцены.
+     Всё это приходит запросом, где сервер проверяет, кем человек приходится площадке.
+     Источники на сцене, строки слоёв и поля свойств собирает скрипт — текст в них
+     вставляется как текст, а не как разметка. -->
+<body class="studio calm">
+  <div id="glow" aria-hidden="true"></div>
+  <canvas id="rain" aria-hidden="true"></canvas>
+  <div class="fog" aria-hidden="true"></div>
+  <div id="flash" aria-hidden="true"></div>
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <nav class="topnav" aria-label="Верхняя панель">
+    <a class="brand" href="/" aria-label="krafen studio — на главную">
+      <span class="brand-word">kra<em>fen</em></span>
+      <span class="brand-tag">editor</span>
+    </a>
+    <div class="topnav-links">
+      <a href="/">Главная</a>
+      <a class="active" href="/app">Рабочая среда</a>
+    </div>
+    <div class="topnav-right">
+      <span class="status-badge muted" id="live-status"><span class="dot"></span>связь…</span>
+      <span class="user-chip hide-compact" id="user-chip" hidden>
+        <span class="avatar" id="user-chip-letter" aria-hidden="true"></span>
+        <span class="name" id="user-chip-name"></span>
+      </span>
+      <button class="btn-action hide-compact" type="button" data-logout>Выйти</button>
+      <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="mobile-nav">Меню</button>
+    </div>
+  </nav>
+
+  <nav class="mobile-nav" id="mobile-nav" aria-label="Меню">
+    <button class="mobile-nav-close" type="button" aria-label="Закрыть меню">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+    <a href="/">Главная</a>
+    <a class="active" href="/app">Рабочая среда</a>
+    <button class="btn-ghost" type="button" data-logout>Выйти из аккаунта</button>
+  </nav>
+
+  <main class="editor-layout">
+    <!-- Шапка редактора: чья сцена, сохранено ли, главные действия -->
+    <header class="glass editor-bar">
+      <a class="back-link" id="back-link" href="/app">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+        <span>К площадке</span>
+      </a>
+      <div class="editor-heading">
+        <div class="card-label">сцена площадки</div>
+        <h1 class="editor-name" id="ws-name">Загрузка…</h1>
+      </div>
+      <div class="editor-bar-side">
+        <span class="status-badge muted" id="ws-role" hidden></span>
+        <span class="status-badge amber" id="upload-status" role="status" hidden></span>
+        <span class="status-badge muted" id="save-status" role="status" hidden></span>
+      </div>
+      <div class="editor-bar-actions">
+        <button class="btn-action" type="button" id="library-open" disabled>Файлы</button>
+        <button class="btn-primary sm" type="button" id="add-open" disabled>Добавить источник</button>
+      </div>
+    </header>
+
+    <!-- Пока сцена не пришла -->
+    <div class="notice-box" id="state-loading" role="status">Загружаю сцену…</div>
+
+    <!-- Площадки нет или доступ к ней закрыт: для постороннего это выглядит одинаково -->
+    <div class="empty-box" id="state-gone" hidden>
+      <div class="big">404</div>
+      <p>Сцена недоступна: площадку удалили, или вас больше нет в её команде</p>
+      <div class="empty-actions">
+        <a class="btn-primary sm" href="/app">К списку площадок</a>
+      </div>
+    </div>
+
+    <!-- Сервер не ответил -->
+    <div class="warn-box" id="state-offline" role="alert" hidden>
+      <div class="row between">
+        <span>Не удалось загрузить сцену: нет связи с сервером.</span>
+        <button class="btn-action" type="button" id="state-retry">Повторить</button>
+      </div>
+    </div>
+
+    <div class="editor-grid show-layers" id="state-ready" hidden>
+      <!-- На узком экране слои и свойства показываются по очереди -->
+      <div class="panel-switch" role="group" aria-label="Что показать под сценой">
+        <button class="filter-pill active" type="button" id="tab-layers" aria-pressed="true">Слои</button>
+        <button class="filter-pill" type="button" id="tab-props" aria-pressed="false">Свойства</button>
+      </div>
+
+      <!-- Слои: порядок источников, видимость, защита от сдвига -->
+      <section class="glass editor-panel layers-panel" aria-labelledby="layers-title">
+        <div class="panel-head">
+          <h2 class="panel-title" id="layers-title">Слои</h2>
+          <span class="status-badge muted" id="layers-count"></span>
+        </div>
+        <div class="layer-tools" role="toolbar" aria-label="Действия с выбранным слоем">
+          <button class="icon-btn tool" type="button" id="layer-top" aria-label="Поднять на самый верх" title="На самый верх" disabled>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14M12 20V9M7 13l5-5 5 5"/></svg>
+          </button>
+          <button class="icon-btn tool" type="button" id="layer-up" aria-label="Поднять выше" title="Выше" disabled>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>
+          </button>
+          <button class="icon-btn tool" type="button" id="layer-down" aria-label="Опустить ниже" title="Ниже" disabled>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+          </button>
+          <button class="icon-btn tool" type="button" id="layer-bottom" aria-label="Опустить в самый низ" title="В самый низ" disabled>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20h14M12 4v11M7 11l5 5 5-5"/></svg>
+          </button>
+          <span class="tool-gap" aria-hidden="true"></span>
+          <button class="icon-btn tool" type="button" id="layer-copy" aria-label="Дублировать источник" title="Дублировать" disabled>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1"/></svg>
+          </button>
+          <button class="icon-btn tool danger" type="button" id="layer-remove" aria-label="Удалить источник" title="Удалить" disabled>
+            <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>
+          </button>
+        </div>
+        <!-- Строки собирает js/editor/layers.js: названия вставляются как текст -->
+        <ul class="layer-list" id="layer-list"></ul>
+        <p class="list-empty" id="layers-empty" hidden>
+          На сцене пока пусто. Нажмите «Добавить источник» — он появится в центре сцены.
+        </p>
+        <div class="field-hint panel-foot">Верхний в списке лежит на сцене поверх остальных.</div>
+      </section>
+
+      <!-- Сцена: то же самое, что попадёт в эфир -->
+      <section class="stage-col" aria-label="Сцена">
+        <div class="glass stage-card">
+          <div class="stage" id="stage" tabindex="0" role="group" aria-label="Сцена" aria-describedby="stage-help">
+            <div class="stage-preview-frame" id="stage-frame">
+              <div id="scene"></div>
+            </div>
+            <div class="stage-overlay" id="stage-overlay"></div>
+            <div class="stage-drop" aria-hidden="true">Отпустите файл — он загрузится и встанет на сцену</div>
+          </div>
+          <div class="stage-foot">
+            <span class="kv-inline">сцена <strong id="stage-size">1920 × 1080</strong></span>
+            <span class="stage-help" id="stage-help">
+              <span class="help-mouse">Перетаскивайте источники мышью, за квадратики на рамке меняйте размер. Стрелки сдвигают на 1 точку, с Shift — на 10; Alt отключает привязку к краям; Delete удаляет.</span>
+              <span class="help-touch">Первое касание выбирает источник, второе — двигает. Размер меняют за квадратики на рамке.</span>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Свойства выбранного источника: поля собирает js/editor/panel.js -->
+      <section class="glass editor-panel props-panel" aria-labelledby="props-title">
+        <div class="panel-head">
+          <h2 class="panel-title" id="props-title">Свойства</h2>
+        </div>
+        <p class="list-empty" id="props-empty">
+          Выберите источник на сцене или в списке слоёв — здесь появятся его настройки.
+        </p>
+        <div class="props-body" id="props-body" hidden></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Окно: какой источник добавить. Список собирает скрипт из тех же модулей типов, что знает сервер -->
+  <div class="modal" id="modal-add" role="dialog" aria-modal="true" aria-labelledby="modal-add-title">
+    <div class="modal-box wide">
+      <div class="modal-head">
+        <div>
+          <div class="modal-eyebrow">новый источник</div>
+          <h3 class="modal-title" id="modal-add-title">Что добавить на сцену</h3>
+        </div>
+        <button class="icon-btn" type="button" data-close-modal="modal-add" aria-label="Закрыть">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <ul class="type-grid" id="add-list"></ul>
+    </div>
+  </div>
+
+  <!-- Окно: файлы площадки -->
+  <div class="modal" id="modal-library" role="dialog" aria-modal="true" aria-labelledby="library-title">
+    <div class="modal-box wide">
+      <div class="modal-head">
+        <div>
+          <div class="modal-eyebrow" id="library-eyebrow">файлы площадки</div>
+          <h3 class="modal-title" id="library-title">Файлы</h3>
+        </div>
+        <button class="icon-btn" type="button" data-close-modal="modal-library" aria-label="Закрыть">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+
+      <div class="library-top">
+        <div class="library-usage">
+          <div class="kv-row"><span>Файлов</span><strong id="usage-files"></strong></div>
+          <div class="kv-row"><span>Занято места</span><strong id="usage-bytes"></strong></div>
+          <div class="meter" aria-hidden="true"><div class="meter-fill" id="usage-meter"></div></div>
+        </div>
+        <div class="library-upload">
+          <input type="file" id="file-input" multiple hidden>
+          <button class="btn-primary sm" type="button" id="upload-pick" data-autofocus>Загрузить файлы</button>
+          <div class="field-hint" id="upload-hint"></div>
+        </div>
+      </div>
+
+      <!-- Ход загрузки: строки собирает js/editor/library.js -->
+      <ul class="upload-list" id="upload-list" hidden></ul>
+
+      <div class="pill-row" id="library-filter" role="group" aria-label="Какие файлы показывать"></div>
+      <ul class="file-grid" id="file-grid"></ul>
+      <p class="list-empty" id="library-empty" hidden></p>
+    </div>
+  </div>
+
+  <!-- Окно: подтверждение (удалить источник, удалить файл). Стоит последним: оно открывается и поверх окна файлов -->
+  <div class="modal" id="modal-confirm" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div class="modal-box">
+      <div class="modal-head">
+        <div>
+          <div class="modal-eyebrow" id="confirm-eyebrow">подтверждение</div>
+          <h3 class="modal-title" id="confirm-title">Вы уверены?</h3>
+        </div>
+        <button class="icon-btn" type="button" data-close-modal="modal-confirm" aria-label="Закрыть">
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <p class="settings-text modal-note" id="confirm-text"></p>
+      <div class="warn-box" id="confirm-error" role="alert" hidden></div>
+      <div class="modal-foot">
+        <button class="btn-ghost sm" type="button" data-close-modal="modal-confirm" data-autofocus>Отмена</button>
+        <button class="btn-primary sm" type="button" id="confirm-submit">Подтвердить</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -111,6 +111,72 @@ const MIGRATIONS = [
       WHERE key = 'platform_stage';
     `,
   },
+  {
+    /* Сцена: источники и загруженные файлы.
+
+       У площадки ровно одна сцена, поэтому отдельной таблицы сцен нет: размер сцены
+       и номер её версии лежат в самой площадке. Номер версии растёт на единицу при
+       каждом сохранённом изменении — по нему страница понимает, что отстала.
+
+       Источник — один объект сцены. Общее для всех типов (положение, размер, порядок,
+       видимость, защита от сдвига, файл) лежит в своих столбцах; настройки конкретного
+       типа — текстом в формате JSON: их состав задаёт модуль типа, и новый тип
+       не требует изменения базы. state — то, что сервер вычислил сам (ход таймера):
+       страница это значение прислать не может.
+
+       Файл хранится на диске под случайным номером, без имени и расширения; здесь
+       записано, что это за файл по его содержимому. Источник ссылается на файл
+       своей площадки; база не оставит ссылку на файл, которого уже нет. */
+    version: 4,
+    name: '004_scene',
+    sql: `
+      ALTER TABLE workspaces ADD COLUMN scene_width INTEGER NOT NULL DEFAULT 1920;
+      ALTER TABLE workspaces ADD COLUMN scene_height INTEGER NOT NULL DEFAULT 1080;
+      ALTER TABLE workspaces ADD COLUMN scene_version INTEGER NOT NULL DEFAULT 0;
+
+      CREATE TABLE media_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        public_id TEXT NOT NULL UNIQUE,
+        workspace_id INTEGER NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+        uploaded_by INTEGER REFERENCES users (id) ON DELETE SET NULL,
+        kind TEXT NOT NULL CHECK (kind IN ('image', 'gif', 'video')),
+        mime TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL CHECK (size_bytes > 0),
+        width INTEGER,
+        height INTEGER,
+        name TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      ) STRICT;
+
+      CREATE INDEX media_files_workspace_idx ON media_files (workspace_id);
+
+      CREATE TABLE sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        public_id TEXT NOT NULL UNIQUE,
+        workspace_id INTEGER NOT NULL REFERENCES workspaces (id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        x INTEGER NOT NULL,
+        y INTEGER NOT NULL,
+        width INTEGER NOT NULL CHECK (width > 0),
+        height INTEGER NOT NULL CHECK (height > 0),
+        opacity INTEGER NOT NULL DEFAULT 100 CHECK (opacity BETWEEN 0 AND 100),
+        layer INTEGER NOT NULL,
+        visible INTEGER NOT NULL DEFAULT 1 CHECK (visible IN (0, 1)),
+        locked INTEGER NOT NULL DEFAULT 0 CHECK (locked IN (0, 1)),
+        media_id INTEGER REFERENCES media_files (id) ON DELETE SET NULL,
+        settings TEXT NOT NULL DEFAULT '{}',
+        state TEXT NOT NULL DEFAULT '{}'
+      ) STRICT;
+
+      CREATE INDEX sources_workspace_idx ON sources (workspace_id, layer);
+      CREATE INDEX sources_media_idx ON sources (media_id);
+
+      UPDATE system_settings
+      SET value = '5', updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE key = 'platform_stage';
+    `,
+  },
 ];
 
 /* Несколько изменений как одно целое: либо применяются все, либо ни одного.

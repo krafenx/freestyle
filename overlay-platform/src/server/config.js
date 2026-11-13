@@ -44,6 +44,17 @@ function parseChoice(raw, allowed, fallback, name) {
   return value;
 }
 
+/* Целое число в заданных границах. Как и с перечнями, опечатка останавливает запуск. */
+function parseWholeNumber(raw, { min, max, fallback, name }) {
+  const value = String(raw ?? '').trim();
+  if (!value) return fallback;
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < min || number > max) {
+    throw new Error(`Некорректное значение ${name}: «${raw}». Нужно целое число от ${min} до ${max}`);
+  }
+  return number;
+}
+
 // Пустое значение (HOST= без адреса) означает то же, что отсутствие настройки
 function envValue(name) {
   const value = String(process.env[name] ?? '').trim();
@@ -71,6 +82,11 @@ export function loadConfig(overrides = {}) {
     sessionCookieMode: parseChoice(
       overrides.sessionCookieMode ?? process.env.SESSION_COOKIE_MODE,
       ['standard', 'embedded'], 'standard', 'SESSION_COOKIE_MODE'
+    ),
+    // Сколько места на диске могут занять все загруженные файлы вместе, в мегабайтах
+    uploadsTotalLimitMb: parseWholeNumber(
+      overrides.uploadsTotalLimitMb ?? process.env.UPLOADS_TOTAL_LIMIT_MB,
+      { min: 1, max: 1024 * 1024, fallback: 5120, name: 'UPLOADS_TOTAL_LIMIT_MB' }
     ),
     publicDir: path.resolve(PROJECT_ROOT, 'public'),
     fontsDir: path.resolve(PROJECT_ROOT, 'node_modules/@fontsource'),

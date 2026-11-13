@@ -10,3 +10,13 @@
 @import url("/vendor/fonts/manrope/600.css");
 @import url("/vendor/fonts/jetbrains-mono/400.css");
 @import url("/vendor/fonts/jetbrains-mono/700.css");
+
+/* Жирные и курсивные начертания для надписей на сцене («Жирный», «Курсив» в свойствах
+   текста и таймера). Браузер скачивает файл начертания, только когда оно понадобилось.
+   У Alice и Medula One таких начертаний нет в природе — их браузер получает наклоном
+   и утолщением обычного. */
+@import url("/vendor/fonts/cormorant-infant/700.css");
+@import url("/vendor/fonts/cormorant-infant/700-italic.css");
+@import url("/vendor/fonts/manrope/700.css");
+@import url("/vendor/fonts/jetbrains-mono/400-italic.css");
+@import url("/vendor/fonts/jetbrains-mono/700-italic.css");

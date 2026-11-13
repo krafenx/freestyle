@@ -1,0 +1,278 @@
+/* ==========================================================================
+   Сцена: как выглядят источники. Этот файл подключают и редактор, и оверлей
+   для OBS — вместе с общим модулем отрисовки (js/scene/view.js) он гарантирует,
+   что в эфире сцена выглядит так же, как в редакторе.
+
+   Здесь намеренно нет свежих возможностей CSS: встроенный браузер OBS старше
+   обычного, и то, чего он не знает, в эфире просто не сработало бы.
+   ========================================================================== */
+
+.kf-scene {
+  position: relative;
+  overflow: hidden;
+  transform-origin: 0 0;
+  /* Размеры задаёт js/scene/view.js, масштаб под окно — страница */
+}
+
+/* Рамка источника. На сцене ничего не нажимается: в редакторе выбор и перетаскивание
+   обрабатывает слой поверх сцены, а в эфире нажимать некому */
+.kf-src {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.kf-src[hidden] {
+  display: none;
+}
+
+.kf-src *,
+.kf-src *::before,
+.kf-src *::after {
+  box-sizing: border-box;
+}
+
+.kf-src-body {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+/* ---------- Текст и таймер ---------- */
+.kf-text {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+}
+
+.kf-text-label {
+  position: relative;
+  isolation: isolate;
+  max-width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-shadow: var(--kf-shadow, none);
+}
+
+/* Обводка — копия надписи под буквами, обведённая вдвое толще: наружу выступает
+   ровно заданная толщина, а внутренняя половина закрыта самими буквами */
+.kf-text-label.kf-stroked {
+  text-shadow: none;
+}
+
+.kf-text-label.kf-stroked::before {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  z-index: -1;
+  color: var(--kf-stroke-color, #000);
+  -webkit-text-stroke: var(--kf-stroke, 0);
+  text-shadow: var(--kf-shadow, none);
+}
+
+/* Цифры одной ширины: надпись не «дрожит», когда меняются секунды */
+.kf-timer-label {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Картинка, GIF, видео ---------- */
+.kf-media {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+}
+
+.kf-media-item {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* ---------- Фигура ---------- */
+.kf-shape {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+}
+
+/* ---------- Виджеты ---------- */
+.kf-widget {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow: hidden;
+  font-family: "Manrope", Arial, sans-serif;
+  font-size: var(--kf-size, 30px);
+  line-height: 1.3;
+  color: #f5f5f5;
+  --kf-accent: #a31313;
+}
+
+.kf-goal,
+.kf-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: rgba(12, 12, 16, 0.8);
+  border: 1px solid rgba(160, 160, 160, 0.2);
+  border-radius: 0.55em;
+}
+
+.kf-goal {
+  gap: 0.32em;
+  padding: 0.55em 0.8em;
+}
+
+.kf-goal-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.8em;
+}
+
+.kf-goal-title {
+  min-width: 0;
+  font-family: "Alice", "Cormorant Infant", serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kf-goal-count {
+  flex: none;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.7em;
+  color: #e0e0e0;
+  white-space: nowrap;
+}
+
+.kf-goal-bar {
+  flex: none;
+  height: 0.46em;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.kf-goal-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--kf-accent);
+  box-shadow: 0 0 0.5em var(--kf-accent);
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.kf-goal-percent {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.56em;
+  letter-spacing: 0.14em;
+  color: #a0a0a0;
+  text-align: right;
+}
+
+.kf-ticker {
+  display: flex;
+  align-items: center;
+  background: rgba(12, 12, 16, 0.8);
+  border-top: 1px solid rgba(160, 160, 160, 0.2);
+  border-bottom: 0.1em solid var(--kf-accent);
+}
+
+.kf-ticker-run {
+  flex: none;
+  white-space: pre;
+  will-change: transform;
+  animation: kf-ticker 12s linear infinite;
+}
+
+@keyframes kf-ticker {
+  from {
+    transform: translateX(var(--kf-ticker-from, 100%));
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+.kf-card {
+  gap: 0.22em;
+  padding: 0.6em 0.9em;
+  border-left: 0.16em solid var(--kf-accent);
+}
+
+.kf-card-badge {
+  align-self: flex-start;
+  padding: 0.3em 0.85em;
+  border-radius: 999px;
+  background: var(--kf-accent);
+  font-size: 0.42em;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.kf-card-badge[hidden],
+.kf-card-text[hidden] {
+  display: none;
+}
+
+.kf-card-title {
+  font-family: "Alice", "Cormorant Infant", serif;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.kf-card-text {
+  font-size: 0.58em;
+  color: #a0a0a0;
+  overflow-wrap: anywhere;
+}
+
+/* Свой блок: рамка-«песочница» во весь источник. Цветовая схема задана явно и совпадает
+   со схемой страницы внутри рамки (js/scene/html-block.js): при разных схемах браузер
+   залил бы фон рамки сплошным цветом, и блок перестал бы быть прозрачным. */
+.kf-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color-scheme: dark;
+}
+
+/* ---------- Подсказка на месте пустого источника (только в редакторе) ---------- */
+.kf-placeholder {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  border: 2px dashed rgba(224, 224, 224, 0.4);
+  border-radius: 14px;
+  background: rgba(12, 12, 16, 0.6);
+  font: 400 30px/1.3 "Manrope", Arial, sans-serif;
+  color: rgba(224, 224, 224, 0.8);
+  text-align: center;
+  overflow: hidden;
+}

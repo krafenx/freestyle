@@ -11,6 +11,10 @@
 let toastTimer = null;
 let toastFrame = null;
 
+// Сколько уведомление держится на экране: короткое — около трёх секунд, длинное — дольше,
+// чтобы его успели прочитать
+const toastDuration = (text) => Math.min(9000, 2800 + Math.max(0, text.length - 50) * 50);
+
 export function toast(message, tone = 'default') {
   let el = document.getElementById('toast');
   if (!el) {
@@ -31,7 +35,7 @@ export function toast(message, tone = 'default') {
   // увидит уведомление, когда вернётся, и оно не останется висеть на экране навсегда.
   toastFrame = requestAnimationFrame(() => {
     el.classList.add('show');
-    toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+    toastTimer = setTimeout(() => el.classList.remove('show'), toastDuration(String(message)));
   });
 }
 

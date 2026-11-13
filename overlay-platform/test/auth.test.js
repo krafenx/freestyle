@@ -952,12 +952,23 @@ describe('Этап 3 — страницы входа', () => {
   it('текст от пользователя попадает на страницу только как текст, а не как разметка', () => {
     const scripts = listScripts(path.join(publicDir, 'js'));
     assert.ok(scripts.length >= 10);
+    /* Одно исключение — файл, который готовит «свой блок» виджета. Разметку он не вставляет
+       в страницу, а очищает и отдаёт в рамку-«песочницу» без скриптов; как именно —
+       проверяется отдельно, в scene.test.js. */
+    const sandboxOnly = new Set(['js/scene/html-block.js']);
+    let exceptions = 0;
     for (const file of scripts) {
       const code = fs.readFileSync(file, 'utf8');
-      const name = path.relative(publicDir, file);
-      assert.doesNotMatch(code, /\.(innerHTML|outerHTML)\b|insertAdjacentHTML|document\.write/, `${name}: сборка разметки из строк`);
+      const name = path.relative(publicDir, file).split(path.sep).join('/');
+      if (sandboxOnly.has(name)) {
+        exceptions += 1;
+        assert.doesNotMatch(code, /\.(innerHTML|outerHTML)\s*=[^=]|insertAdjacentHTML|document\.write/, `${name}: разметка вставляется в страницу`);
+      } else {
+        assert.doesNotMatch(code, /\.(innerHTML|outerHTML)\b|insertAdjacentHTML|document\.write/, `${name}: сборка разметки из строк`);
+      }
       assert.doesNotMatch(code, /\beval\(|new Function\(/, `${name}: выполнение текста как кода`);
     }
+    assert.equal(exceptions, sandboxOnly.size, 'файл-исключение переименован или удалён — список исключений нужно обновить');
   });
 
   it('ключ входа не хранится там, где его может прочитать скрипт страницы', () => {

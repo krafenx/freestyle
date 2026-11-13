@@ -626,10 +626,10 @@ describe('Этап 7 — страницы и документы рассказы
     assert.match(page, /изменил \$\{actor\.name\}/);
   });
 
-  it('оба README обещают «готов этап 7 из 9» и рассказывают про правки на лету', () => {
+  it('оба README обещают «готов этап 8 из 9» и рассказывают про правки на лету', () => {
     for (const name of ['README.md', '../README.md']) {
       const text = fs.readFileSync(path.join(PROJECT_DIR, name), 'utf8');
-      assert.match(text, /этап 7 из 9/, name);
+      assert.match(text, /этап 8 из 9/, name);
       assert.match(text, /[Пп]равки на лету/, name);
     }
   });

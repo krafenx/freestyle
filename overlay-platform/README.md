@@ -163,7 +163,7 @@
 Ещё снимки: [окно «Добавить источник»](../docs/overlay-platform/screenshots/21-editor-add-source.jpg),
 [регистрация](../docs/overlay-platform/screenshots/10-register.jpg),
 [код восстановления](../docs/overlay-platform/screenshots/11-recovery-code.jpg),
-[план работ](../docs/overlay-platform/screenshots/05-workspace-plan.jpg),
+[план работ — все девять этапов готовы](../docs/overlay-platform/screenshots/36-plan-vse-etapy.jpg),
 [что уже работает](../docs/overlay-platform/screenshots/02-home-live.jpg),
 [источники сцены](../docs/overlay-platform/screenshots/03-home-sources.jpg),
 [элементы интерфейса](../docs/overlay-platform/screenshots/04-home-ui.jpg).
